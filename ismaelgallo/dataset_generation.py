@@ -19,14 +19,15 @@ from PCB_solver_tr import PCB_case_2
 from Dataset_Class import PCBDataset
 
 
-n_data = 10000
+n_train = 20000
+n_test = 10000
+n_validation = 5000
+n_data = n_train+n_test+n_validation  
 
 nodes_side = 13
-time_sim = 5000
+time_sim = 2000
 dt = 1
 T_init = 298.0
-
-# n_data = n_train+n_test+n_validation
 
 input = []
 output = []
@@ -42,7 +43,7 @@ time_start = time.time()
 for i in range(n_data):
     
     # Print iteration number
-    if i%1 == 0:
+    if i%200 == 0:
         print("Generating element number: ",i)
         
     # Generate the data
@@ -93,15 +94,32 @@ output_mean = output.mean()
 output_std = output.std()
 
 
+dataset_test = PCBDataset(T_interfaces[:n_test,:,:],Q_heaters[:n_test,:,:],T_env[:n_test,:,:],output[:n_test,:,:],
+                 T_interfaces_mean,T_interfaces_std,Q_heaters_mean,
+                 Q_heaters_std,T_env_mean,T_env_std,output_mean,
+                 output_std)
+
+dataset_train = PCBDataset(T_interfaces[n_test:-n_validation,:,:],Q_heaters[n_test:-n_validation,:,:],T_env[n_test:-n_validation,:,:],output[n_test:-n_validation,:,:],
+                 T_interfaces_mean,T_interfaces_std,Q_heaters_mean,
+                 Q_heaters_std,T_env_mean,T_env_std,output_mean,
+                 output_std)
+
+dataset_val = PCBDataset(T_interfaces[-n_validation:,:,:],Q_heaters[-n_validation:,:,:],T_env[-n_validation:,:,:],output[-n_validation:,:,:],
+                 T_interfaces_mean,T_interfaces_std,Q_heaters_mean,
+                 Q_heaters_std,T_env_mean,T_env_std,output_mean,
+                 output_std)
+
 dataset = PCBDataset(T_interfaces,Q_heaters,T_env,output,
                  T_interfaces_mean,T_interfaces_std,Q_heaters_mean,
                  Q_heaters_std,T_env_mean,T_env_std,output_mean,
                  output_std)
 
 # path directorie for saving datasets
-path = os.path.join(base_path,'Datasets')
+path = os.path.join(base_path,'datasets')
 if not os.path.exists(path):
     os.makedirs(path)
     
-    
-torch.save(dataset, os.path.join(base_path,"Datasets",'PCB_transient_dataset.pth'))
+torch.save(dataset_train, os.path.join(path, 'PCB_transient_dataset_train.pth'))
+torch.save(dataset_test, os.path.join(path, 'PCB_transient_dataset_test.pth'))
+torch.save(dataset_val, os.path.join(path, 'PCB_transient_dataset_val.pth'))
+torch.save(dataset, os.path.join(path, 'PCB_transient_dataset.pth'))
