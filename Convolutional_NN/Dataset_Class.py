@@ -87,42 +87,42 @@ class PCBDataset(Dataset):
         - Q_heaters: np.array de shape (4,)
         - T_interfaces: np.array de shape (4,)
         - T_env: float o escalar
-        
+
         Devuelve: tensor (1, T, 3, 13, 13)
         """
         nodes_side = 13
-    
+
         # Convertir a tensores
         Q_heaters = torch.tensor(Q_heaters, dtype=torch.float32)
         T_interfaces = torch.tensor(T_interfaces, dtype=torch.float32)
         T_env = torch.tensor(T_env, dtype=torch.float32)
-    
+
         # Normalizar
         Q_norm = (Q_heaters - self.Q_heaters_mean) / self.Q_heaters_std
         T_int_norm = (T_interfaces - self.T_interfaces_mean) / self.T_interfaces_std
         T_env_norm = (T_env - self.T_env_mean) / self.T_env_std
-    
+
         # Crear mapas (3, 13, 13)
         Q_map = torch.zeros((13, 13))
         T_map = torch.zeros((13, 13))
         T_env_map = torch.full((13, 13), T_env_norm)
-    
+
         # Posicionar los valores
         T_map[0, 0] = T_int_norm[0]
         T_map[0, -1] = T_int_norm[1]
         T_map[-1, -1] = T_int_norm[2]
         T_map[-1, 0] = T_int_norm[3]
-    
+
         Q_map[6, 3] = Q_norm[0]
         Q_map[3, 6] = Q_norm[1]
         Q_map[9, 3] = Q_norm[2]
         Q_map[9, 9] = Q_norm[3]
-    
+
         # Stack y replicar en el tiempo
         input_tensor = torch.stack([T_map, Q_map, T_env_map], dim=0)  # (3, 13, 13)
         input_tensor = input_tensor.unsqueeze(0).unsqueeze(1)         # (1, 1, 3, 13, 13)
         input_tensor = input_tensor.repeat(1, sequence_length, 1, 1, 1)  # (1, T, 3, 13, 13)
-    
+
         return input_tensor.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
 
 
@@ -173,7 +173,8 @@ class PCBDataset(Dataset):
 # TrimmedDataset: Wrapper para recorte eficiente de muestras y tiempo
 # -----------------------------------------------------------------------------
 class TrimmedDataset(Dataset):
-    def __init__(self, base_dataset: Dataset, max_samples: int = None, time_steps_input: int = None, time_steps_output: int = None):
+    def __init__(self, base_dataset: Dataset, max_samples: int = None,
+                 time_steps_input: int = None, time_steps_output: int = None):
         self.base_dataset = base_dataset
         self.max_samples = max_samples or len(base_dataset)
         self.time_steps_input = time_steps_input
@@ -183,25 +184,42 @@ class TrimmedDataset(Dataset):
         return min(self.max_samples, len(self.base_dataset))
 
     def __getitem__(self, idx):
-        data = self.base_dataset[idx]
+        """
+        Obtiene un ejemplo del dataset base. Si el dataset base tiene el atributo `return_bc`
+        y está activado, también devuelve las condiciones de contorno (q, t_int, t_env).
+        Si no, devuelve solo (input, output).
 
+        Además, aplica recorte temporal si se ha especificado.
+        """
+        # Activar temporalmente return_bc si existe y está en False
+        if hasattr(self.base_dataset, 'return_bc') and self.base_dataset.return_bc:
+            data = self.base_dataset[idx]
+        else:
+            # Fuerza temporalmente return_bc a False para evitar que devuelva bcs
+            original_return_bc = getattr(self.base_dataset, 'return_bc', False)
+            self.base_dataset.return_bc = False
+            data = self.base_dataset[idx]
+            self.base_dataset.return_bc = original_return_bc
+
+        # Separar los datos en input, output y posibles condiciones de contorno
         if isinstance(data, tuple) and len(data) > 2:
             input_data, output_data, *bcs = data
         else:
             input_data, output_data = data
             bcs = []
 
-        # Cortar inputs si tienen dim temporal
+        # Recorte de la secuencia temporal del input si se ha definido
         if self.time_steps_input is not None and input_data.ndim >= 4:
             input_data = input_data[:self.time_steps_input]
 
-        # Cortar outputs si tienen dim temporal
+        # Recorte de la secuencia temporal del output si se ha definido
         if self.time_steps_output is not None and output_data.ndim >= 3:
             output_data = output_data[:self.time_steps_output]
 
+        # Devolver (input, output, *bcs) si existen condiciones, o solo (input, output)
         return (input_data, output_data, *bcs) if bcs else (input_data, output_data)
-
-
+    
+    
 # -----------------------------------------------------------------------------
 # load_trimmed_dataset: Carga y recorta dataset desde .pth
 # -----------------------------------------------------------------------------
@@ -237,31 +255,56 @@ def load_trimmed_dataset(base_path='.', folder='datasets', dataset_type=None,
 # -----------------------------------------------------------------------------
 # prepare_data_for_convlstm: ajusta input/output para entrenamiento ConvLSTM
 # -----------------------------------------------------------------------------
-def prepare_data_for_convlstm(dataset, device='cuda'):
+def prepare_data_for_convlstm(dataset, device='cuda', with_bc=False):
     """
-    Prepara input y output para modelo ConvLSTM, asumiendo que el recorte ya se hizo en load_trimmed_dataset.
-    - input: (N, C, H, W) → (N, T, C, H, W) replicando en tiempo
-    - output: (N, T, H, W) → (N, T, 1, H, W)
+    Prepara input, output y (opcionalmente) condiciones de contorno para entrenar un modelo ConvLSTM.
+
+    Parámetros:
+    - dataset: instancia tipo TrimmedDataset
+    - device: dispositivo donde enviar los tensores (default: 'cuda')
+    - with_bc: si True, también devuelve bc_all concatenando [Q, T_int, T_env]
+
+    Returns:
+    - x: (N, T, C, H, W)
+    - y: (N, T, 1, H, W)
+    - (opcional) bc_all: (N, 9)
     """
-    x_list = []
-    y_list = []
+    x_list, y_list, bc_list = [], [], []
+
     for i in range(len(dataset)):
-        xi, yi = dataset[i]
-        x_list.append(xi)
-        y_list.append(yi)
-    
-    x = torch.stack(x_list)
-    y = torch.stack(y_list)
+        sample = dataset[i]
+        x, y = sample[:2]
+        x_list.append(x)
+        y_list.append(y)
 
+        if with_bc and len(sample) == 5:
+            q, t_int, t_env = sample[2:]
+            bc = torch.cat([q, t_int, t_env.unsqueeze(0)], dim=0)  # (9,)
+            bc_list.append(bc)
 
-    # Añadir canal a y si es necesario
+    x = torch.stack(x_list)  # (N, C, H, W)
+    y = torch.stack(y_list)  # (N, T, H, W) o (N, H, W)
+
+    # Ajustar dimensiones
     if y.ndim == 4:
-        y = y.unsqueeze(2)
+        y = y.unsqueeze(2)  # (N, T, 1, H, W)
     elif y.ndim != 5:
         raise ValueError(f"[ERROR] Forma inesperada para y: {y.shape}")
 
-    T = y.shape[1]  # número de pasos temporales
+    T = y.shape[1]
     x = x.unsqueeze(1).repeat(1, T, 1, 1, 1)  # (N, T, C, H, W)
 
-    # print(f"[DEBUG] Final x: {x.shape} | y: {y.shape}")
-    return x.to(device), y.to(device)
+    x = x.to(device)
+    y = y.to(device)
+
+    print(f"[DEBUG] x: {x.shape}, y: {y.shape}", end="")
+
+    if with_bc:
+        if not bc_list:
+            raise RuntimeError("⚠️ `with_bc=True`, pero el dataset no contiene condiciones de contorno.")
+        bc_all = torch.stack(bc_list).to(device)  # (N, 9)
+        print(f", bc_all: {bc_all.shape}")
+        return x, y, bc_all
+
+    print()
+    return x, y
