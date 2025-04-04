@@ -19,13 +19,13 @@ from PCB_solver_tr import PCB_case_2
 from Dataset_Class import PCBDataset
 
 
-n_train = 20000
-n_test = 10000
-n_validation = 5000
+n_train = 5000
+n_test = 1000
+n_validation = 500
 n_data = n_train+n_test+n_validation  
 
 nodes_side = 13
-time_sim = 2000
+time_sim = 1000
 dt = 1
 T_init = 298.0
 
