@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, TensorDataset
 import os
 
 #%%
@@ -165,6 +165,29 @@ class PCBDataset(Dataset):
         self.inputs = self.inputs.to(device)
         self.outputs = self.outputs.to(device)
         
+    def extract_bc_values(self, q_map, t_int_map, t_env_map):
+        # Heaters: extraer los 4 valores de entrada
+        q = torch.tensor([
+            q_map[6, 3],
+            q_map[3, 6],
+            q_map[9, 3],
+            q_map[9, 9]
+        ])
+
+        # Interfaces: 4 esquinas
+        t_int = torch.tensor([
+            t_int_map[0, 0],
+            t_int_map[0, -1],
+            t_int_map[-1, -1],
+            t_int_map[-1, 0]
+        ])
+
+        # T_env: es constante
+        t_env = torch.tensor([t_env_map[0, 0]])
+
+        return q, t_int, t_env
+
+        
     
     
 #%%    
@@ -279,6 +302,11 @@ def prepare_data_for_convlstm(dataset, device='cuda', with_bc=False):
 
         if with_bc and len(sample) == 5:
             q, t_int, t_env = sample[2:]
+
+            # Asegurar que t_env es escalar
+            if t_env.ndim == 2:
+                t_env = t_env[0, 0]
+
             bc = torch.cat([q, t_int, t_env.unsqueeze(0)], dim=0)  # (9,)
             bc_list.append(bc)
 
@@ -297,14 +325,82 @@ def prepare_data_for_convlstm(dataset, device='cuda', with_bc=False):
     x = x.to(device)
     y = y.to(device)
 
-    print(f"[DEBUG] x: {x.shape}, y: {y.shape}", end="")
-
     if with_bc:
         if not bc_list:
             raise RuntimeError("⚠️ `with_bc=True`, pero el dataset no contiene condiciones de contorno.")
         bc_all = torch.stack(bc_list).to(device)  # (N, 9)
-        print(f", bc_all: {bc_all.shape}")
+        # print(f"[DEBUG] x: {x.shape}, y: {y.shape}, bc_all: {bc_all.shape}")
         return x, y, bc_all
 
-    print()
+    # print(f"[DEBUG] x: {x.shape}, y: {y.shape}")
     return x, y
+
+
+# -----------------------------------------------------------------------------
+# Función auxiliar para preparar datos (con repetición temporal)
+# -----------------------------------------------------------------------------
+# def prepare_data_with_bc(dataset, device):
+    # inputs, outputs, q, t_int, t_env = zip(*[dataset[i] for i in range(len(dataset))])
+    
+    # # Convertir listas a tensores
+    # outputs = torch.stack(outputs)                          # [B, T, 1, 13, 13] (incluye todos los pasos temporales)
+    # inputs = torch.stack(inputs)                            # [B, 3, 13, 13] 
+    # inputs = inputs.unsqueeze(1).repeat(1, outputs.shape[1], 1, 1, 1)  # [B, T, 3, 13, 13] (repetir en el tiempo)
+    # q = torch.stack(q).view(len(dataset), -1)               # [B, 4]
+    # t_int = torch.stack(t_int).view(len(dataset), -1)       # [B, 4]
+    # t_env = torch.stack(t_env).view(len(dataset), -1)       # [B, 1]
+    
+    # # Asegurarse de que outputs tenga la forma correcta
+    # if outputs.ndim == 4:  # Si outputs no tiene dimensión temporal
+    #     outputs = outputs.unsqueeze(2)                     # [B, T, 1, 13, 13]
+
+    # # print("inputs.shape:", inputs.shape)   # DEBUGGING
+    # # print("outputs.shape:", outputs.shape)  # DEBUGGING
+
+    # # Concatenar todas las condiciones de contorno
+    # bc_all = torch.cat([q, t_int, t_env], dim=1)            # [B, 9]
+
+    # # Mover a dispositivo
+    # return TensorDataset(inputs.to(device), outputs.to(device), bc_all.to(device))
+    
+def prepare_data_with_bc(dataset, device):
+    inputs, outputs, q_list, t_int_list, t_env_list = [], [], [], [], []
+
+    for i in range(len(dataset)):
+        x, y, q_raw, t_int_raw, t_env_raw = dataset[i]
+
+        # Recoger x e y
+        inputs.append(x)
+        outputs.append(y)
+
+        # Reducir mapas espaciales a vectores (4,) y (1,)
+        # Para Q y T_interfaces: extraer los 4 valores no-cero
+        q_vals = q_raw[q_raw != 0].flatten()
+        t_int_vals = t_int_raw[t_int_raw != 0].flatten()
+
+        # Para T_env: usar el valor medio o directamente uno (es constante)
+        t_env_val = t_env_raw[0, 0] if t_env_raw.ndim == 2 else t_env_raw
+
+        q_list.append(q_vals)
+        t_int_list.append(t_int_vals)
+        t_env_list.append(torch.tensor([t_env_val], dtype=torch.float32))
+
+    # Convertir a tensores
+    x = torch.stack(inputs)  # (B, C, H, W)
+    y = torch.stack(outputs)  # (B, T, 1, H, W) o (B, T, H, W)
+    q = torch.stack(q_list)  # (B, 4)
+    t_int = torch.stack(t_int_list)  # (B, 4)
+    t_env = torch.stack(t_env_list)  # (B, 1)
+
+    # Asegurar canal en y
+    if y.ndim == 4:
+        y = y.unsqueeze(2)  # (B, T, 1, H, W)
+
+    # Repetir input en tiempo
+    T = y.shape[1]
+    x = x.unsqueeze(1).repeat(1, T, 1, 1, 1)  # (B, T, C, H, W)
+
+    # Concatenar condiciones
+    bc_all = torch.cat([q, t_int, t_env], dim=1)  # (B, 9)
+
+    return TensorDataset(x.to(device), y.to(device), bc_all.to(device))
