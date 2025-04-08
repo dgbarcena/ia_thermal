@@ -1,8 +1,12 @@
-# 🪦 Repositorio extinto
+  GNU nano 7.2                       README.md                        Modified
+El antiguo repositorio en GitLab ha
+---
 
-Este repositorio ha sido cerrado y no se mantiene más.
+##  ~J Para qué sirve
 
-👉 Puedes encontrar la versión activa en: [https://github.com/ismaelgallolopez/ia_thermal](https://github.com/ismaelgallolopez/ia_thermal)
+Está pensado como base para:
+- Investigación y experimentación con modelos térmicos basados en datos
+- Integración con herramientas de simulación existentes
+- Aplicaciones educativas o académicas
 
-Gracias por tu interés.
 
