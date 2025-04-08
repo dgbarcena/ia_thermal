@@ -228,25 +228,30 @@ def PCB_solver_main(solver:str, Lx:float,Ly:float,thickness:float,nx:int,ny:int,
     
     elif solver == 'transient':
         alpha = board_k/(board_rho*board_c) # thermal difusivity.
+        
         if alpha*dt/(0.5*(dx+dy))**2 > 0.5: # stability criterion for Euler scheeme. --> the criterion can be found here (eq 11): https://en.wikipedia.org/wiki/Von_Neumann_stability_analysis
             print("Excesive timestep size. Euler method becomes unstable.")
             exit(1)
         T = np.full(n_nodes, T_init, dtype=np.double) 
         interface_nodes_id = np.array(list(interfaces.keys()))
         heater_nodes_id = np.array(list(heaters.keys()))
+        
         for i_node in interfaces: # changing the temperature of the interface nodes from T_init to the proper temperature of the interface.
             T[i_node] = interfaces[i_node]
-        T_array = np.expand_dims(T, axis=0)
+                        
+        T_array = np.expand_dims(T.copy(), axis=0)
         time_array = np.array([0.0])
         ti = 0.0
+        
         while ti < time:
+            ti += dt
             dTdt = (Q - K.__matmul__(T) - Boltzmann_cte * E.__matmul__(T**4 - Tenv**4)) / (board_c * board_rho * thickness * dx * dy)
             dTdt[interface_nodes_id] = 0 # cancel de derivative term in the interface nodes. 
             dT = dTdt * dt
             T += dT
-            T_array = np.concatenate((T_array, np.expand_dims(T, axis=0)), axis=0)
-            ti += dt
+            T_array = np.concatenate((T_array, np.expand_dims(T.copy(), axis=0)), axis=0)
             time_array = np.append(time_array, ti)
+
 
         if display == True:
             fig1, ax1 = plt.subplots(1, 1, figsize=(6, 6), constrained_layout=True)

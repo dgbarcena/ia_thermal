@@ -133,8 +133,8 @@ def plot_loss_evolution(train_loss, test_loss):
     epochs = np.arange(1, len(train_loss)+1)
     
     
-    plt.plot(epochs, train_loss, label='Train')
-    plt.plot(epochs, test_loss, label='Test')
+    plt.plot(epochs, train_loss, label='Train', color='black')
+    plt.plot(epochs, test_loss, label='Test', color='red')
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.yscale('log')
@@ -309,3 +309,105 @@ def plot_nodes_evolution(y_pred, y_true, nodes_idx, dt=1, together=True, save_as
             os.makedirs('figures', exist_ok=True)
             fig.savefig(f'figures/{filename}.pdf', format='pdf')
         plt.show()
+        
+        
+#%%
+
+def compare_error_maps_2d(err1_map, err2_map, 
+                          titles=("Error Map 1", "Error Map 2"),
+                          return_mse=False,
+                          save_as_pdf=False,
+                          filename='compare_error_maps'):
+    """
+    Compara visualmente dos mapas de error 2D (por ejemplo, error cuadrático por píxel).
+
+    Parámetros:
+        err1_map: array (H, W) – primer mapa de error
+        err2_map: array (H, W) – segundo mapa de error
+        titles: tupla de strings – títulos personalizados para los mapas
+        return_mse: bool – si es True, devuelve el MSE global de cada mapa
+        save_as_pdf: bool – si es True, guarda la figura como PDF en 'figures'
+        filename: string – nombre base del archivo (sin extensión)
+
+    Devuelve:
+        mse1, mse2: MSE global para cada mapa (si return_mse == True)
+    """
+    mse1 = np.mean(err1_map**2)
+    mse2 = np.mean(err2_map**2)
+
+    vmax = max(err1_map.max(), err2_map.max())
+
+    fig, axs = plt.subplots(1, 2, figsize=(12, 4))
+
+    im1 = axs[0].imshow(err1_map, cmap='viridis', vmin=0, vmax=vmax)
+    axs[0].set_title(f"{titles[0]}\nMSE = {mse1:.6f} K²")
+    plt.colorbar(im1, ax=axs[0])
+
+    im2 = axs[1].imshow(err2_map, cmap='viridis', vmin=0, vmax=vmax)
+    axs[1].set_title(f"{titles[1]}\nMSE = {mse2:.6f} K²")
+    plt.colorbar(im2, ax=axs[1])
+
+    plt.tight_layout()
+
+    if save_as_pdf:
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf')
+
+    plt.show()
+
+    if return_mse:
+        return mse1, mse2
+    
+
+#%%
+
+def plot_prediction_and_error(y_pred, y_true, t=0, cmap='hot', save_as_pdf=False, filename='prediction_and_error'):
+    """
+    Representa la predicción de un modelo junto con el error absoluto en cada punto.
+    
+    Parámetros:
+        y_pred: array o tensor con shape (T, H, W) – predicciones del modelo
+        y_true: array o tensor con shape (T, H, W) – valores reales del solver
+        t: int – índice del tiempo que se desea visualizar
+        cmap: str – esquema de colores para los mapas de temperatura
+        save_as_pdf: bool – si es True, guarda la figura como PDF en 'figures'
+        filename: str – nombre base del archivo (sin extensión)
+    """
+    # Asegurarse de que los datos estén en formato NumPy
+    if isinstance(y_pred, torch.Tensor):
+        y_pred = y_pred.detach().cpu().numpy()
+    if isinstance(y_true, torch.Tensor):
+        y_true = y_true.detach().cpu().numpy()
+
+    # Extraer los datos en el tiempo t
+    pred = y_pred[t, :, :]
+    real = y_true[t, :, :]
+    abs_error = np.abs(pred - real)
+
+    # Rango común de temperatura para predicción y valores reales
+    vmin = min(real.min(), pred.min())
+    vmax = max(real.max(), pred.max())
+
+    # Crear la figura con dos subplots
+    fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Mapa de predicción
+    im0 = axs[0].imshow(pred, cmap=cmap, vmin=vmin, vmax=vmax)
+    axs[0].set_title("Predicted Temperature [K]")
+    plt.colorbar(im0, ax=axs[0])
+
+    # Mapa de error absoluto
+    im1 = axs[1].imshow(abs_error, cmap='viridis')
+    axs[1].set_title("Absolute Error [K]")
+    plt.colorbar(im1, ax=axs[1])
+
+    # Ajustar diseño
+    plt.tight_layout()
+
+    # Guardar como PDF si es necesario
+    if save_as_pdf:
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf')
+
+    # Mostrar la figura
+    plt.show()
