@@ -1,6 +1,6 @@
 {
-    "start_datetime": "2025-03-28 13:42:47",
-    "training_duration_minutes": 0.20563260316848755,
+    "start_datetime": "2025-04-08 08:02:39",
+    "training_duration_minutes": 8.226385164260865,
     "system_specs": {
         "os": "Windows",
         "os_version": "10.0.19041",
@@ -12,22 +12,31 @@
         "gpu_memory_total_GB": 2.0,
         "cuda_version": "11.8"
     },
-    "hidden_layers": 32,
+    "hidden_dims": [
+        32
+    ],
     "kernel_size": "3x3",
-    "batch_size": 32,
-    "lr": 0.001,
+    "batch_size": 50,
+    "lr": 0.01,
     "scheduler": {
         "type": "ReduceLROnPlateau",
         "factor": 0.1,
-        "patience": 10
+        "patience": 10,
+        "final_lr": 0.01
     },
     "early_stop_patience": 50,
-    "epochs_trained": 1,
-    "best_test_loss": 0.6329027563333511,
+    "epochs_trained": 4,
+    "best_test_loss": 0.1057659275829792,
     "train_loss": [
-        0.8317085057497025
+        0.29531028494238853,
+        0.13559932112693787,
+        0.1373755820095539,
+        0.11370876431465149
     ],
     "test_loss": [
-        0.6329027563333511
+        0.16718929260969162,
+        0.1344105303287506,
+        0.12236650660634041,
+        0.1057659275829792
     ]
 }
