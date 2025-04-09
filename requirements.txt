@@ -1,0 +1,26 @@
+# Núcleo de PyTorch
+torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
+
+# Ciencia de datos
+numpy
+pandas
+scikit-learn
+matplotlib
+seaborn
+
+# Utilidades
+tqdm
+joblib
+
+# Jupyter y notebooks
+ipykernel
+ipywidgets
+jupyterlab
+notebook
+nbconvert
+
+# Otros importantes
+sympy
+pyyaml
