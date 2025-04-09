@@ -5,6 +5,7 @@ import os
 import glob
 import random
 
+
 def generate_edge_index(grid_size):
     """
     Genera la matriz de adyacencia (edge_index) para una malla 2D cuadrada.
@@ -69,6 +70,7 @@ def load_latest_model(model, folder="saved_models"):
     # Cargar el modelo
     model.load_state_dict(torch.load(latest_model, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu')))
     print(f" Modelo cargado desde: {latest_model}")
+
     return model
 
 def load_model_by_name(model, filename, folder="saved_models"):
@@ -124,3 +126,4 @@ def get_dataloaders_optuna(batch_size, dataset_path="Datasets/PCB_Dataset_Norm.p
     input_dim = graphs[0].x.shape[1]
 
     return train_loader, val_loader, test_loader, input_dim
+
