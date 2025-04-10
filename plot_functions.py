@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.patches import Rectangle
 import os
 
 #%%
@@ -411,3 +413,92 @@ def plot_prediction_and_error(y_pred, y_true, t=0, cmap='hot', save_as_pdf=False
 
     # Mostrar la figura
     plt.show()
+    
+#%%
+
+
+def generar_gif_pcb_comparacion(model_preds, solver_data, dt=1, nombre_archivo="comparison_evolution",
+                                 guardar_en_figures=False, duracion_total=10.0):
+    """
+    Genera un GIF o animación comparando las predicciones del modelo y los datos del solver.
+    Fondo blanco, texto de tiempo grande y barra de progreso con fondo.
+
+    Args:
+        model_preds (np.ndarray): Array (T, H, W) de predicciones del modelo.
+        solver_data (np.ndarray): Array (T, H, W) de datos del solver (ground truth).
+        dt (float): Paso temporal entre frames (en segundos).
+        nombre_archivo (str or None): Nombre base del archivo (sin extensión). Si None, no se guarda.
+        guardar_en_figures (bool): Si True, guarda el gif en la carpeta 'figures/' junto al notebook.
+        duracion_total (float): Duración total del gif en segundos.
+
+    Returns:
+        ani (matplotlib.animation.FuncAnimation): Objeto de animación para uso en Jupyter.
+    """
+
+    assert model_preds.shape == solver_data.shape, "Las formas de model_preds y solver_data deben coincidir."
+    total_frames = model_preds.shape[0]
+
+    # Calcular fps e intervalo para mantener la duración total deseada
+    fps = total_frames / duracion_total
+    interval_ms = int(1000 / fps)
+
+    # Crear figura
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+
+    # Fondo blanco
+    fig.patch.set_facecolor('white')
+    ax1.set_facecolor('white')
+    ax2.set_facecolor('white')
+
+    vmin = min(model_preds.min(), solver_data.min())
+    vmax = max(model_preds.max(), solver_data.max())
+    im1 = ax1.imshow(model_preds[0], vmin=vmin, vmax=vmax, cmap='jet')
+    im2 = ax2.imshow(solver_data[0], vmin=vmin, vmax=vmax, cmap='jet')
+
+    ax1.set_title("Modelo", fontsize=14, color='black')
+    ax2.set_title("Solver", fontsize=14, color='black')
+    for ax in [ax1, ax2]:
+        ax.axis('off')
+
+    # Barra de color común
+    cbar_ax = fig.add_axes([0.92, 0.2, 0.02, 0.6])
+    cbar = plt.colorbar(im1, cax=cbar_ax)
+    cbar.ax.yaxis.set_tick_params(color='black')
+    plt.setp(cbar.ax.yaxis.get_ticklabels(), color='black', fontsize=10)
+
+
+    # Barra de progreso con fondo
+    progress_ax = fig.add_axes([0.25, 0.01, 0.5, 0.02])
+    progress_ax.set_xlim(0, 1)
+    progress_ax.set_ylim(0, 1)
+    progress_ax.axis('off')
+    background_bar = Rectangle((0, 0), 1, 1, color='lightgray')
+    progress_bar = Rectangle((0, 0), 0, 1, color='blue')
+    progress_ax.add_patch(background_bar)
+    progress_ax.add_patch(progress_bar)
+
+    # Texto del tiempo fuera de la barra
+    tiempo_num = fig.text(0.5, 0.045, "0.00 s", ha='center', va='bottom', fontsize=18, color='black')
+
+    # Función de actualización
+    def update(frame):
+        im1.set_data(model_preds[frame])
+        im2.set_data(solver_data[frame])
+        tiempo_actual = frame * dt
+        progress_bar.set_width((frame + 1) / total_frames)
+        tiempo_num.set_text(f"{tiempo_actual:.2f} s")
+        return im1, im2, progress_bar, tiempo_num
+
+    # Crear animación (¡sin blit!)
+    ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=interval_ms, blit=False)
+
+    if nombre_archivo:
+        base_path = os.getcwd()
+        carpeta = os.path.join(base_path, "figures") if guardar_en_figures else base_path
+        os.makedirs(carpeta, exist_ok=True)
+        ruta_salida = os.path.join(carpeta, f"{nombre_archivo}.gif")
+        ani.save(ruta_salida, writer='pillow', fps=fps, savefig_kwargs={'facecolor': 'white'})
+        plt.close()
+    else:
+        plt.close()
+    return ani
