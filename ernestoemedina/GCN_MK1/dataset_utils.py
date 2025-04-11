@@ -69,6 +69,7 @@ def load_latest_model(model, folder="saved_models"):
     # Cargar el modelo
     model.load_state_dict(torch.load(latest_model, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu')))
     print(f" Modelo cargado desde: {latest_model}")
+
     return model
 
 def load_model_by_name(model, filename, folder="saved_models"):
