@@ -1,6 +1,9 @@
 import torch
 from torch_geometric.data import Data
+from torch_geometric.loader import DataLoader
+import os
 import glob
+import random
 
 def generate_edge_index(grid_size):
     """
@@ -67,3 +70,57 @@ def load_latest_model(model, folder="saved_models"):
     model.load_state_dict(torch.load(latest_model, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu')))
     print(f" Modelo cargado desde: {latest_model}")
     return model
+
+def load_model_by_name(model, filename, folder="saved_models"):
+    """
+    Carga un modelo especificado por su nombre de archivo desde la carpeta dada.
+    
+    Args:
+        model: instancia del modelo a cargar.
+        filename: nombre del archivo (ej. "GCN_Layers_10_HDim_64_Epochs_1000_Lr_0.001_Batch_32.pth").
+        folder: carpeta donde está guardado el modelo.
+    
+    Returns:
+        model con los pesos cargados.
+    """
+    model_path = os.path.join(folder, filename)
+    
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"No se encontró el archivo: {model_path}")
+    
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu')))
+    print(f"Modelo cargado desde: {model_path}")
+    return model
+
+def get_dataloaders_optuna(batch_size, dataset_path="Datasets/PCB_Dataset_Norm.pth"):  # De cara a la optimización de hiperparámetros
+    """
+    Carga el dataset, genera los grafos y devuelve los dataloaders + input_dim.
+    """
+    # 1. Cargar el dataset normalizado
+    dataset = torch.load(dataset_path)
+
+    # 2. Crear edge_index
+    grid_size = dataset.outputs.shape[-1]  # asumimos que las salidas son (n, n)
+    edge_index = generate_edge_index(grid_size)
+
+    # 3. Convertir en lista de grafos
+    graphs = build_graph_list(dataset, edge_index)
+    random.shuffle(graphs)
+    
+    # 4. Dividir dataset
+    total = len(graphs)
+    train_split = int(0.7 * total)
+    val_split = int(0.85 * total)
+
+    train_graphs = graphs[:train_split]
+    val_graphs = graphs[train_split:val_split]
+    test_graphs = graphs[val_split:]
+    # 5. Crear DataLoaders
+    train_loader = DataLoader(train_graphs, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_graphs, batch_size=batch_size)
+    test_loader = DataLoader(test_graphs, batch_size=batch_size)
+
+    # 6. input_dim = número de canales de entrada
+    input_dim = graphs[0].x.shape[1]
+
+    return train_loader, val_loader, test_loader, input_dim
