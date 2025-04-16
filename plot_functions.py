@@ -502,3 +502,85 @@ def generar_gif_pcb_comparacion(model_preds, solver_data, dt=1, nombre_archivo="
     else:
         plt.close()
     return ani
+
+
+#%%
+
+
+def generar_gif_error_evolucion(model_preds, solver_data, dt=1, nombre_archivo="error_evolution",
+                                 guardar_en_figures=False, duracion_total=10.0):
+    """
+    Genera un GIF o animación mostrando la evolución del error absoluto entre las predicciones del modelo y los datos del solver.
+    Fondo blanco, texto de tiempo grande y barra de progreso con fondo.
+
+    Args:
+        model_preds (np.ndarray): Array (T, H, W) de predicciones del modelo.
+        solver_data (np.ndarray): Array (T, H, W) de datos del solver (ground truth).
+        dt (float): Paso temporal entre frames (en segundos).
+        nombre_archivo (str or None): Nombre base del archivo (sin extensión). Si None, no se guarda.
+        guardar_en_figures (bool): Si True, guarda el gif en la carpeta 'figures/' junto al notebook.
+        duracion_total (float): Duración total del gif en segundos.
+
+    Returns:
+        ani (matplotlib.animation.FuncAnimation): Objeto de animación para uso en Jupyter.
+    """
+    assert model_preds.shape == solver_data.shape, "Las formas de model_preds y solver_data deben coincidir."
+    total_frames = model_preds.shape[0]
+
+    error_abs = np.abs(model_preds - solver_data)
+
+    # Calcular fps e intervalo para mantener la duración total deseada
+    fps = total_frames / duracion_total
+    interval_ms = int(1000 / fps)
+
+    # Crear figura
+    fig, ax = plt.subplots(figsize=(5, 5))
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
+
+    vmin = 0.0
+    vmax = error_abs.max()
+    im = ax.imshow(error_abs[0], vmin=vmin, vmax=vmax, cmap='hot')
+    ax.set_title("Error absoluto", fontsize=14, color='black')
+    ax.axis('off')
+
+    # Barra de color
+    cbar_ax = fig.add_axes([0.88, 0.2, 0.03, 0.6])
+    cbar = plt.colorbar(im, cax=cbar_ax)
+    cbar.ax.yaxis.set_tick_params(color='black')
+    plt.setp(cbar.ax.yaxis.get_ticklabels(), color='black', fontsize=10)
+
+    # Barra de progreso con fondo
+    progress_ax = fig.add_axes([0.25, 0.01, 0.5, 0.02])
+    progress_ax.set_xlim(0, 1)
+    progress_ax.set_ylim(0, 1)
+    progress_ax.axis('off')
+    background_bar = Rectangle((0, 0), 1, 1, color='lightgray')
+    progress_bar = Rectangle((0, 0), 0, 1, color='blue')
+    progress_ax.add_patch(background_bar)
+    progress_ax.add_patch(progress_bar)
+
+    # Texto del tiempo
+    tiempo_num = fig.text(0.5, 0.045, "0.00 s", ha='center', va='bottom', fontsize=18, color='black')
+
+    # Función de actualización
+    def update(frame):
+        im.set_data(error_abs[frame])
+        tiempo_actual = frame * dt
+        progress_bar.set_width((frame + 1) / total_frames)
+        tiempo_num.set_text(f"{tiempo_actual:.2f} s")
+        return im, progress_bar, tiempo_num
+
+    ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=interval_ms, blit=False)
+
+    if nombre_archivo:
+        base_path = os.getcwd()
+        carpeta = os.path.join(base_path, "figures") if guardar_en_figures else base_path
+        os.makedirs(carpeta, exist_ok=True)
+        ruta_salida = os.path.join(carpeta, f"{nombre_archivo}.gif")
+        ani.save(ruta_salida, writer='pillow', fps=fps, savefig_kwargs={'facecolor': 'white'})
+        plt.close()
+    else:
+        plt.close()
+
+    return ani
