@@ -339,30 +339,6 @@ def prepare_data_for_convlstm(dataset, device='cuda', with_bc=False):
 # -----------------------------------------------------------------------------
 # Función auxiliar para preparar datos (con repetición temporal)
 # -----------------------------------------------------------------------------
-# def prepare_data_with_bc(dataset, device):
-    # inputs, outputs, q, t_int, t_env = zip(*[dataset[i] for i in range(len(dataset))])
-    
-    # # Convertir listas a tensores
-    # outputs = torch.stack(outputs)                          # [B, T, 1, 13, 13] (incluye todos los pasos temporales)
-    # inputs = torch.stack(inputs)                            # [B, 3, 13, 13] 
-    # inputs = inputs.unsqueeze(1).repeat(1, outputs.shape[1], 1, 1, 1)  # [B, T, 3, 13, 13] (repetir en el tiempo)
-    # q = torch.stack(q).view(len(dataset), -1)               # [B, 4]
-    # t_int = torch.stack(t_int).view(len(dataset), -1)       # [B, 4]
-    # t_env = torch.stack(t_env).view(len(dataset), -1)       # [B, 1]
-    
-    # # Asegurarse de que outputs tenga la forma correcta
-    # if outputs.ndim == 4:  # Si outputs no tiene dimensión temporal
-    #     outputs = outputs.unsqueeze(2)                     # [B, T, 1, 13, 13]
-
-    # # print("inputs.shape:", inputs.shape)   # DEBUGGING
-    # # print("outputs.shape:", outputs.shape)  # DEBUGGING
-
-    # # Concatenar todas las condiciones de contorno
-    # bc_all = torch.cat([q, t_int, t_env], dim=1)            # [B, 9]
-
-    # # Mover a dispositivo
-    # return TensorDataset(inputs.to(device), outputs.to(device), bc_all.to(device))
-    
 def prepare_data_with_bc(dataset, device):
     inputs, outputs, q_list, t_int_list, t_env_list = [], [], [], [], []
 
