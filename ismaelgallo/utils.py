@@ -160,12 +160,13 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch, tota
 def evaluate(model, dataloader, criterion, device):
     model.eval()
     total_loss = 0.0
+
     with torch.no_grad():
         for batch in dataloader:
             if len(batch) == 3:
-                x0, t, y = batch
-                x0, t, y = x0.to(device), t.to(device), y.to(device)
-                y_pred = model(x0, t)
+                x, t, y = batch
+                x, t, y = x.to(device), t.to(device), y.to(device)
+                y_pred = model(x, t)
             else:
                 x, y = batch
                 x, y = x.to(device), y.to(device)

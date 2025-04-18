@@ -23,14 +23,16 @@ class SpatioTemporalRegressor(nn.Module):
             nn.Linear(embedding_dim, 13 * 13)
         )
 
-    def forward(self, x0, t):
+    def forward(self, x0, t_seq):
         # x0: (B, C, 13, 13)
-        # t:  (B, 1)
-        x_feat = self.encoder(x0)       # (B, D)
-        t_feat = self.temporal_fc(t)    # (B, D)
-        combined = torch.cat([x_feat, t_feat], dim=1)  # (B, 2D)
-        out = self.mlp(combined)        # (B, 169)
-        return out.view(-1, 1, 13, 13)  # (B, 1, 13, 13)
+        # t_seq: (B, T, 1)
+        B, T, _ = t_seq.shape
+        x_feat = self.encoder(x0)              # (B, D)
+        t_feat = self.temporal_fc(t_seq)       # (B, T, D)
+        x_feat = x_feat.unsqueeze(1).expand(-1, T, -1)  # (B, T, D)
+        combined = torch.cat([x_feat, t_feat], dim=-1)  # (B, T, 2D)
+        out = self.mlp(combined)               # (B, T, 169)
+        return out.view(B, T, 1, 13, 13)        # (B, T, 1, 13, 13)
 
 
 class GenericSpatioTemporalRegressor(nn.Module):
@@ -48,12 +50,12 @@ class GenericSpatioTemporalRegressor(nn.Module):
             nhead=nhead
         )
 
-    def forward(self, x0, t):  # x0: (B, C, 13, 13), t: (B, 1)
-        B = x0.size(0)
-        x_feat = self.encoder(x0)         # (B, D)
-        t_feat = self.temporal_fc(t)      # (B, D)
-        combined = torch.cat([x_feat, t_feat], dim=-1)  # (B, 2D)
-        combined = combined.unsqueeze(1)  # (B, 1, 2D)
-
-        y_seq = self.temporal_decoder(combined)  # (B, 1, 1, 13, 13)
-        return y_seq.squeeze(1)  # (B, 1, 13, 13)
+    def forward(self, x0, t_seq):
+        # x0: (B, C, 13, 13), t_seq: (B, T, 1)
+        B, T, _ = t_seq.shape
+        x_feat = self.encoder(x0)               # (B, D)
+        t_feat = self.temporal_fc(t_seq)        # (B, T, D)
+        x_feat = x_feat.unsqueeze(1).expand(-1, T, -1)  # (B, T, D)
+        combined = torch.cat([x_feat, t_feat], dim=-1)  # (B, T, 2D)
+        y_seq = self.temporal_decoder(combined)         # (B, T, 1, 13, 13)
+        return y_seq

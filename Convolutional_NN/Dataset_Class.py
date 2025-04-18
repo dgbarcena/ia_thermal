@@ -243,6 +243,39 @@ class TrimmedDataset(Dataset):
         return (input_data, output_data, *bcs) if bcs else (input_data, output_data)
     
     
+class TemporalRegressionDataset(Dataset):
+    def __init__(self, x_seq, y_seq):
+        """
+        x_seq: Tensor de forma (N, T, C, H, W)
+        y_seq: Tensor de forma (N, T, 1, H, W)
+        """
+        self.x0 = x_seq[:, 0]  # (N, C, H, W)
+        self.y = y_seq         # (N, T, 1, H, W)
+        self.T = y_seq.shape[1]
+        self.N = y_seq.shape[0]
+
+        # Crear t normalizado una sola vez (B, T, 1)
+        t_values = torch.linspace(0, 1, steps=self.T).view(1, self.T, 1)  # (1, T, 1)
+        self.t_seq = t_values.expand(self.N, -1, -1)  # (N, T, 1)
+
+    def __len__(self):
+        return self.N
+
+    def __getitem__(self, idx):
+        return self.x0[idx], self.t_seq[idx], self.y[idx]
+    
+def load_convlstm_data_split(base_path, dataset_type, max_samples, sequence_length, device, batch_size, shuffle=False):
+    dataset = load_trimmed_dataset(
+        base_path=base_path,
+        dataset_type=dataset_type,
+        max_samples=max_samples,
+        time_steps_output=sequence_length
+    )
+    input_tensor, output_tensor = prepare_data_for_convlstm(dataset, device=device)
+    return DataLoader(TensorDataset(input_tensor, output_tensor), batch_size=batch_size, shuffle=shuffle)
+
+    
+    
 # -----------------------------------------------------------------------------
 # load_trimmed_dataset: Carga y recorta dataset desde .pth
 # -----------------------------------------------------------------------------
