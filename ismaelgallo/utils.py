@@ -6,6 +6,7 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
     
+from tqdm import tqdm
 import numpy as np
 import torch
 from Convolutional_NN.Dataset_Class import *
@@ -125,3 +126,52 @@ def extract_all_boundary_conditions(input_tensor, dataset: PCBDataset, nodes_sid
     T_env_all = torch.stack(T_env_all)               # [batch_size]
 
     return Q_heaters_all, T_interfaces_all, T_env_all
+
+
+
+def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch, total_epochs):
+    model.train()
+    total_loss = 0.0
+    loop = tqdm(dataloader, desc=f"Epoch {epoch+1}/{total_epochs} - Training", leave=False)
+
+    for batch in loop:
+        # Detectar si es (x, y) o (x, t, y)
+        if len(batch) == 3:
+            x, t, y = batch
+            x, t, y = x.to(device), t.to(device), y.to(device)
+            y_pred = model(x, t)
+        else:
+            x, y = batch
+            x, y = x.to(device), y.to(device)
+            y_pred = model(x)
+
+        loss = criterion(y_pred, y)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item()
+        loop.set_postfix(loss=loss.item())
+
+    return total_loss / len(dataloader)
+
+
+
+def evaluate(model, dataloader, criterion, device):
+    model.eval()
+    total_loss = 0.0
+    with torch.no_grad():
+        for batch in dataloader:
+            if len(batch) == 3:
+                x0, t, y = batch
+                x0, t, y = x0.to(device), t.to(device), y.to(device)
+                y_pred = model(x0, t)
+            else:
+                x, y = batch
+                x, y = x.to(device), y.to(device)
+                y_pred = model(x)
+
+            loss = criterion(y_pred, y)
+            total_loss += loss.item()
+
+    return total_loss / len(dataloader)
