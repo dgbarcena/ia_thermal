@@ -587,7 +587,7 @@ def generar_gif_error_evolucion(model_preds, solver_data, dt=1, nombre_archivo="
 
 
 #%%
-def plot_mae_per_pixel(model, dataloader, device, sample_idx=0):
+def plot_mae_per_pixel(model, dataloader, dataset, device, sample_idx=0):
     """
     Calcula y grafica el error absoluto medio (MAE) por píxel acumulado en el tiempo para una muestra del dataloader.
     Compatible con modelos que usan (x, y) o (x, t, y).
@@ -610,10 +610,11 @@ def plot_mae_per_pixel(model, dataloader, device, sample_idx=0):
     y_pred = y_pred[sample_idx].squeeze(1).cpu()  # (T, 13, 13)
 
     error_map = torch.mean(torch.abs(y_true - y_pred), dim=0)  # (13, 13)
+    error_map_real = error_map * dataset.T_outputs_std.cpu()  # (13, 13)
 
     plt.figure(figsize=(5, 5))
-    plt.imshow(error_map, cmap='hot')
-    plt.colorbar(label="MAE acumulado")
+    plt.imshow(error_map_real, cmap='hot')
+    plt.colorbar(label="MAE acumulado[K]")
     plt.title("Mapa de error absoluto medio por píxel")
     plt.axis('off')
     plt.tight_layout()
@@ -624,10 +625,10 @@ def plot_mae_per_pixel(model, dataloader, device, sample_idx=0):
     
     
 #%%
-def plot_mae_per_frame(model, dataloader, device, sample_idx=0): 
+def plot_mae_per_frame(model, dataloader, dataset, device, sample_idx=0):
     """
-    Calcula y grafica el error absoluto medio (MAE) por paso temporal para una muestra del dataloader.
-    Compatible con modelos que usan (x, y) o (x, t, y).
+    Calcula y grafica el error absoluto medio (MAE) por paso temporal en escala original (desnormalizada)
+    para una muestra del dataloader. Compatible con modelos que usan (x, y) o (x, t, y).
     """
     model.eval()
     model.to(device)
@@ -646,13 +647,22 @@ def plot_mae_per_frame(model, dataloader, device, sample_idx=0):
     y_true = y[sample_idx].squeeze(1).cpu()       # (T, 13, 13)
     y_pred = y_pred[sample_idx].squeeze(1).cpu()  # (T, 13, 13)
 
-    mae_per_t = torch.mean(torch.abs(y_true - y_pred), dim=(1, 2))  # (T,)
+    # Desnormalizar salidas
+    std = dataset.T_outputs_std.cpu()
+    y_true_denorm = y_true * std
+    y_pred_denorm = y_pred * std
+
+    # MAE por paso temporal
+    mae_per_t = torch.mean(torch.abs(y_true_denorm - y_pred_denorm), dim=(1, 2))  # (T,)
 
     plt.figure(figsize=(8, 4))
     plt.plot(mae_per_t, marker='o')
-    plt.title("Error absoluto medio por paso temporal")
+    plt.title("Error absoluto medio por paso temporal (desnormalizado)")
     plt.xlabel("Paso temporal t")
-    plt.ylabel("MAE")
+    plt.ylabel("MAE [K]")
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+
+    # return mae_per_t
+
