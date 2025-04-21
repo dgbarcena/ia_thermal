@@ -618,6 +618,9 @@ def plot_mae_per_pixel(model, dataloader, device, sample_idx=0):
     plt.axis('off')
     plt.tight_layout()
     plt.show()
+
+
+
     
     
 #%%
