@@ -34,9 +34,9 @@ output = []
 
 np.random.seed(0)
 
-Q_random = np.random.uniform(0.1, 1.25, (n_data, 4))
-T_interfaces_random = np.random.uniform(260, 310, (n_data, 4))
-T_env_random = np.random.uniform(260, 310, n_data)
+Q_random = np.random.uniform(0.5, 1.0, (n_data, 4))
+T_interfaces_random = np.random.uniform(280, 310, (n_data, 4))
+T_env_random = np.random.uniform(280, 310, n_data)
 
 time_start = time.time()
 
@@ -119,7 +119,12 @@ path = os.path.join(base_path,'datasets')
 if not os.path.exists(path):
     os.makedirs(path)
     
-torch.save(dataset_train, os.path.join(path, 'PCB_transient_dataset_train.pth'))
-torch.save(dataset_test, os.path.join(path, 'PCB_transient_dataset_test.pth'))
-torch.save(dataset_val, os.path.join(path, 'PCB_transient_dataset_val.pth'))
-torch.save(dataset, os.path.join(path, 'PCB_transient_dataset.pth'))
+# torch.save(dataset_train, os.path.join(path, 'PCB_transient_dataset_train.pth'))
+# torch.save(dataset_test, os.path.join(path, 'PCB_transient_dataset_test.pth'))
+# torch.save(dataset_val, os.path.join(path, 'PCB_transient_dataset_val.pth'))
+# torch.save(dataset, os.path.join(path, 'PCB_transient_dataset.pth'))
+
+torch.save(dataset_train, os.path.join(path, 'PCB_transient_dataset_train_reducedrange.pth'))
+torch.save(dataset_test, os.path.join(path, 'PCB_transient_dataset_test_reducedrange.pth'))
+torch.save(dataset_val, os.path.join(path, 'PCB_transient_dataset_val_reducedrange.pth'))
+torch.save(dataset, os.path.join(path, 'PCB_transient_dataset_reducedrange.pth'))
