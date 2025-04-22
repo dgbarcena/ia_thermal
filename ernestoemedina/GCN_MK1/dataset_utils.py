@@ -34,14 +34,16 @@ def build_graph_from_sample(dataset, idx, edge_index):
     """
     Convierte una muestra en un grafo PyG: x ∈ [nxn, 3], y ∈ [nxn, 1]
     """
-
+    
     input_tensor = dataset.inputs[idx]  # (3, n, n)
-    x = input_tensor.reshape(3, -1).T  # [nxn, 3]
+    x = input_tensor.reshape(3, -1).T   # [nxn, 3]
 
     output_tensor = dataset.outputs[idx]  # (n, n)
     y = output_tensor.reshape(-1, 1)      # [nxn, 1]
 
-    return Data(x=x, y=y, edge_index=edge_index)
+    mask_fixed_temp = get_fixed_temp_mask(x)
+
+    return Data(x=x, y=y, edge_index=edge_index, mask_fixed_temp=mask_fixed_temp)
 
 def build_graph_list(dataset, edge_index):
     """
@@ -52,6 +54,22 @@ def build_graph_list(dataset, edge_index):
         graph = build_graph_from_sample(dataset, idx, edge_index)
         graphs.append(graph)
     return graphs
+
+def get_fixed_temp_mask(x):
+    """
+    Devuelve una máscara booleana indicando qué nodos tienen temperatura fijada (input_temp ≠ 0).
+    """
+    # x: [N, 3] -> x[:, 0] es la temperatura de las interfaces
+    return x[:, 0] != 0
+
+def masked_mse_loss(pred, target, mask_fixed_temp):
+    """
+    Calcula el MSE solo en los nodos donde `mask_fixed_temp` es False (i.e., no es condición de contorno).
+    """
+    mask = ~mask_fixed_temp  # invertir la máscara
+    pred_masked = pred[mask]
+    target_masked = target[mask]
+    return F.mse_loss(pred_masked, target_masked)
 
 
 def load_latest_model(model, folder="saved_models"):

@@ -2,7 +2,7 @@ import optuna
 import torch
 import os
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from gcn_model import GCN
+from gat_model import GAT
 from train_eval import train, evaluate
 from dataset_utils import get_dataloaders_optuna
 
@@ -16,16 +16,19 @@ def objective(trial):
     dropout_rate = trial.suggest_float("dropout_rate", 0.0, 0.2)
     lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
     batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
+    heads = trial.suggest_categorical("heads", [4, 8])
+
 
     # --- Cargar datos ---
     train_loader, val_loader, test_loader, input_dim = get_dataloaders(batch_size=batch_size)
 
     # --- Crear modelo ---
-    model = GCN(
+    model = GAT(
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         output_dim=1,
         num_layers=num_layers,
+        heads=heads,
         use_dropout=True,
         dropout_rate=dropout_rate,
         use_batchnorm=False,

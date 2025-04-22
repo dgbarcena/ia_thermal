@@ -59,7 +59,7 @@ def get_fixed_temp_mask(x):
     """
     Devuelve una máscara booleana indicando qué nodos tienen temperatura fijada (input_temp ≠ 0).
     """
-    # x: [N, 3] -> asumimos x[:, 0] es la temperatura
+    # x: [N, 3] -> x[:, 0] es la temperatura de las interfaces
     return x[:, 0] != 0
 
 def masked_mse_loss(pred, target, mask_fixed_temp):
