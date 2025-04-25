@@ -6,6 +6,8 @@ from gat_model import GAT
 from train_eval import train, evaluate
 from dataset_utils import get_dataloaders_optuna
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 def get_dataloaders(batch_size):
     return get_dataloaders_optuna(batch_size)
 
@@ -16,7 +18,7 @@ def objective(trial):
     dropout_rate = trial.suggest_float("dropout_rate", 0.0, 0.2)
     lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
     batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
-    heads = trial.suggest_categorical("heads", [4, 8])
+    heads = trial.suggest_categorical("heads", [2, 8])
 
 
     # --- Cargar datos ---
@@ -33,7 +35,7 @@ def objective(trial):
         dropout_rate=dropout_rate,
         use_batchnorm=False,
         use_residual=False
-    ).to("cuda")
+    ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
@@ -48,8 +50,8 @@ def objective(trial):
 
     # --- Entrenamiento + Evaluación en validación ---
     for epoch in range(50):
-        train(model, train_loader, optimizer, "cuda")
-        val_loss, _, _, _ = evaluate(model, val_loader, "cuda", error_threshold=1.0)
+        train(model, train_loader, optimizer, device)
+        val_loss, _, _, _ = evaluate(model, val_loader, device, error_threshold=1.0)
         scheduler.step(val_loss)
 
     return val_loss  # Métrica a minimizar
@@ -57,8 +59,8 @@ def objective(trial):
 if __name__ == "__main__":
     study = optuna.create_study(
         direction="minimize",
-        study_name="gcn_study_2",
-        storage="sqlite:///gcn_optuna_2.db",  # Persistente para dashboard
+        study_name="gat_study_1",
+        storage="sqlite:///gat_optuna_1.db",  # Persistente para dashboard
         load_if_exists=True
     )
 

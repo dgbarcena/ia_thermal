@@ -8,32 +8,53 @@ from torch_geometric.utils import to_dense_batch
 
 
 
-def train(model, loader, optimizer, device):
+def train(model, loader, optimizer, device, use_physics=False, lambda_physics=0.3):
     model.train()
     total_loss = 0.0
     criterion = torch.nn.MSELoss()
+    # Cargar info de normalización para la pérdida física
+    norm_info = torch.load(os.path.join("Datasets", "normalization_info.pth"))
 
     for batch in loader:
         batch = batch.to(device)
         optimizer.zero_grad()
         out = model(batch.x, batch.edge_index).view(-1)
         true_vals = batch.y.view(-1)
+
         # Enmascarar condiciones de contorno (temperatura fija)
-        mask = ~batch.mask_fixed_temp.view(-1)  # Invertimos: True donde SÍ queremos calcular loss
-        loss = F.mse_loss(out[mask], true_vals[mask])
+        mask = ~batch.mask_fixed_temp.view(-1)
+        loss_data = criterion(out[mask], true_vals[mask])
+
+        # Penalización física opcional
+        if use_physics:
+            loss_physics = compute_physics_loss(
+                pred_T_norm=out,
+                edge_index=batch.edge_index,
+                batch=batch.batch,
+                Q_heaters_norm=batch.x[:, 2],
+                T_env_norm=batch.x[:, 1],
+                norm_info=norm_info
+            )
+            loss = loss_data + lambda_physics * loss_physics
+        else:
+            loss = loss_data
+
         loss.backward()
         optimizer.step()
         total_loss += loss.item() * batch.num_graphs
-        
+
     return total_loss / len(loader.dataset)
 
-def evaluate(model, loader, device, error_threshold, percentage_threshold=None, plot_results=False):
+
+
+def evaluate(model, loader, device, error_threshold, use_physics=False, percentage_threshold=None, plot_results=False):
     model.eval()
-    
+
     all_mse, all_mae, all_r2, all_accuracy = [], [], [], []
     all_true_vals, all_pred_vals = [], []
+    all_physics_loss = []
 
-    # Leer info de normalización solo si se va a graficar
+    # Leer info de normalización (usada tanto para plotting como física)
     norm_info = torch.load(os.path.join("Datasets", "normalization_info.pth"))
     max_temp_output = norm_info["max_T_outputs"].item()
     max_temp_interfaces = norm_info["max_T_interfaces"].item()
@@ -43,15 +64,26 @@ def evaluate(model, loader, device, error_threshold, percentage_threshold=None, 
             data = data.to(device)
             out = model(data.x, data.edge_index).view(-1)
             true_vals = data.y.view(-1)
-            pred_vals = out
+            pred_vals = out.clone()
 
+            # Sustituir condiciones de contorno por valor real
             mask_fixed = data.mask_fixed_temp.view(-1)
             T_interfaces_input = data.x[:, 0]
             T_interfaces_rescaled = T_interfaces_input * (max_temp_interfaces / max_temp_output)
-
-            # Sustituimos los valores en nodos fijos por su ground truth reescalado
             pred_vals[mask_fixed] = T_interfaces_rescaled[mask_fixed]
             true_vals[mask_fixed] = T_interfaces_rescaled[mask_fixed]
+
+            # Solo mostrar la pérdida física si está activada
+            if use_physics:
+                loss_physics = compute_physics_loss(
+                    pred_T_norm=pred_vals,
+                    edge_index=data.edge_index,
+                    batch=data.batch,
+                    Q_heaters_norm=data.x[:, 2],
+                    T_env_norm=data.x[:, 1],
+                    norm_info=norm_info
+                )
+                all_physics_loss.append(loss_physics.item())
 
             total_nodos = true_vals.shape[0]
             nodos_por_grafico = data.num_nodes
@@ -93,6 +125,7 @@ def evaluate(model, loader, device, error_threshold, percentage_threshold=None, 
                 all_true_vals.append(true_graph.cpu())
                 all_pred_vals.append(pred_graph.cpu())
 
+        # Mostrar un mapa si se pide
         if plot_results:
             true_vals_batch = true_vals.view(-1, 1)
             pred_vals_batch = pred_vals.view(-1, 1)
@@ -113,12 +146,16 @@ def evaluate(model, loader, device, error_threshold, percentage_threshold=None, 
             else:
                 print("No se encontró ninguna muestra con número de nodos cuadrado perfecto para graficar.")
 
+    physics_loss_mean = float(torch.tensor(all_physics_loss).mean()) if use_physics else None
+
     return (
         float(torch.tensor(all_mse).mean()),
         float(torch.tensor(all_mae).mean()),
         float(torch.tensor(all_r2).mean()),
-        float(torch.tensor(all_accuracy).mean())
+        float(torch.tensor(all_accuracy).mean()),
+        physics_loss_mean
     )
+
 
 
 def predict(model, loader, device):
@@ -185,4 +222,72 @@ def plot_temperature_maps(true_vals, pred_vals):
     
     plt.tight_layout()
     plt.show()
+
+def compute_physics_loss(pred_T_norm, edge_index, batch, Q_heaters_norm, T_env_norm, norm_info):
+    """
+    Calcula el error físico de un grafo con conducción y radiación al entorno.
+    
+    pred_T_norm: temperaturas predichas normalizadas
+    edge_index: conectividad del grafo [2, num_edges]
+    batch: asignación de nodos a grafos
+    Q_heaters_norm: potencias disipadas normalizadas
+    T_env_norm: temperatura del entorno (una por nodo) normalizada
+    norm_info: diccionario con valores máximos de normalización
+    GLx, GLy: conductancias en x e y
+    GR: coeficiente de radiación nodal
+    """
+    sigma = 5.67e-8  # Constante de Stefan-Boltzmann
+    L = 0.1  # m
+    thickness = 0.001  # m
+    board_k = 15  # W/(K*m)
+    ir_emissivity = 0.8
+    n = 13  # nodos por lado
+
+    dx = L / (n - 1)
+    dy = L / (n - 1)
+    GLx = thickness * board_k * dy / dx
+    GLy = thickness * board_k * dx / dy
+    GR = 2 * dx * dy * ir_emissivity
+    
+    # Desnormalización
+    max_temp_output = norm_info["max_T_outputs"].item()
+    max_Q_heaters = norm_info["max_Q_heaters"].item()
+    max_T_env = norm_info["max_T_env"].item()
+
+    T = pred_T_norm * max_temp_output
+    Q_heaters = Q_heaters_norm * max_Q_heaters
+    T_env = T_env_norm * max_T_env
+
+    # Flujo por conducción homogénea (GLx, GLy)
+    i, j = edge_index
+    Tij = T[i] - T[j]
+
+    # Detección de direcciones: horizontal o vertical
+    dif = torch.abs(i - j)
+    dx = dif == 1
+    dy = ~dx
+
+    Qij = torch.zeros_like(Tij)
+    Qij[dx] = GLx * Tij[dx]
+    Qij[dy] = GLy * Tij[dy]
+
+    # Flujo neto por nodo (conducción)
+    nodal_residuals = torch.zeros_like(T)
+    nodal_residuals.index_add_(0, i, -Qij)
+    nodal_residuals.index_add_(0, j, Qij)
+
+    # Flujo por radiación: GR * σ * (T^4 - T_env^4)
+    Q_rad = GR * sigma * (T**4 - T_env**4)
+    nodal_residuals -= Q_rad
+
+    # Añadir heaters si existen
+    if Q_heaters is not None:
+        nodal_residuals -= Q_heaters.view(-1)
+
+    # Agrupación por grafo
+    from torch_geometric.utils import to_dense_batch
+    residuals_dense, mask = to_dense_batch(nodal_residuals.view(-1, 1), batch)
+    physics_loss = torch.mean((residuals_dense[mask]) ** 2)
+
+    return physics_loss
 
