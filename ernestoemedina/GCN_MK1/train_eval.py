@@ -5,10 +5,12 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 from torch_geometric.utils import to_dense_batch
+from torch_scatter import scatter_mean
 
 
-
-def train(model, loader, optimizer, device, use_physics=False, lambda_physics=0.3):
+def train(model, loader, optimizer, device, use_physics=False, lambda_physics=0.003, use_boundary_loss=True, lambda_boundary=0.01, 
+          use_heater_loss=True, lambda_heater=0.01):
+    
     model.train()
     total_loss = 0.0
     criterion = torch.nn.MSELoss()
@@ -35,29 +37,47 @@ def train(model, loader, optimizer, device, use_physics=False, lambda_physics=0.
                 T_env_norm=batch.x[:, 1],
                 norm_info=norm_info
             )
-            loss = loss_data + lambda_physics * loss_physics
+            
         else:
-            loss = loss_data
+            loss_physics = 0.0
+            
+        if use_boundary_loss:
+            loss_boundary = compute_boundary_loss(
+                pred_T_norm=out,
+                true_T_norm=batch.y.view(-1),
+                mask_fixed=batch.mask_fixed_temp.view(-1)
+            )
+        else:
+            loss_boundary = 0.0
+        if use_heater_loss:
+            loss_heater = compute_heater_loss(
+                pred_T_norm=out,
+                true_T_norm=batch.y.view(-1),
+                Q_heaters_norm=batch.x[:, 2]
+            )
+        else:
+            loss_heater = 0.0
 
+        loss = loss_data + lambda_physics * loss_physics + loss_boundary * lambda_boundary + loss_heater * lambda_heater
+        
         loss.backward()
         optimizer.step()
         total_loss += loss.item() * batch.num_graphs
-
+        
     return total_loss / len(loader.dataset)
 
 
 
-def evaluate(model, loader, device, error_threshold, use_physics=False, percentage_threshold=None, plot_results=False):
+def evaluate(model, loader, device, error_threshold, use_physics=False, use_boundary_loss=True, use_heater_loss=True, percentage_threshold=None, plot_results=False):
     model.eval()
 
     all_mse, all_mae, all_r2, all_accuracy = [], [], [], []
     all_true_vals, all_pred_vals = [], []
-    all_physics_loss = []
+    all_physics_loss, all_boundary_loss, all_heater_loss = [], [], []
 
     # Leer info de normalización (usada tanto para plotting como física)
     norm_info = torch.load(os.path.join("Datasets", "normalization_info.pth"))
     max_temp_output = norm_info["max_T_outputs"].item()
-    max_temp_interfaces = norm_info["max_T_interfaces"].item()
 
     with torch.no_grad():
         for data in loader:
@@ -68,11 +88,7 @@ def evaluate(model, loader, device, error_threshold, use_physics=False, percenta
 
             # Sustituir condiciones de contorno por valor real
             mask_fixed = data.mask_fixed_temp.view(-1)
-            T_interfaces_input = data.x[:, 0]
-            T_interfaces_rescaled = T_interfaces_input * (max_temp_interfaces / max_temp_output)
-            pred_vals[mask_fixed] = T_interfaces_rescaled[mask_fixed]
-            true_vals[mask_fixed] = T_interfaces_rescaled[mask_fixed]
-
+            
             # Solo mostrar la pérdida física si está activada
             if use_physics:
                 loss_physics = compute_physics_loss(
@@ -84,7 +100,23 @@ def evaluate(model, loader, device, error_threshold, use_physics=False, percenta
                     norm_info=norm_info
                 )
                 all_physics_loss.append(loss_physics.item())
-
+            
+            if use_boundary_loss:
+                loss_boundary = compute_boundary_loss(
+                    pred_T_norm=pred_vals,
+                    true_T_norm=true_vals,
+                    mask_fixed=mask_fixed
+                )
+                all_boundary_loss.append(loss_boundary.item())
+                
+            if use_heater_loss:
+                loss_heater = compute_heater_loss(
+                    pred_T_norm=pred_vals,
+                    true_T_norm=true_vals,
+                    Q_heaters_norm=data.x[:, 2]
+                )
+                all_heater_loss.append(loss_heater.item())
+            
             total_nodos = true_vals.shape[0]
             nodos_por_grafico = data.num_nodes
 
@@ -147,13 +179,17 @@ def evaluate(model, loader, device, error_threshold, use_physics=False, percenta
                 print("No se encontró ninguna muestra con número de nodos cuadrado perfecto para graficar.")
 
     physics_loss_mean = float(torch.tensor(all_physics_loss).mean()) if use_physics else None
+    boundary_loss_mean = float(torch.tensor(all_boundary_loss).mean()) if use_boundary_loss else None
+    heater_loss_mean = float(torch.tensor(all_heater_loss).mean()) if use_heater_loss else None
 
     return (
         float(torch.tensor(all_mse).mean()),
         float(torch.tensor(all_mae).mean()),
         float(torch.tensor(all_r2).mean()),
         float(torch.tensor(all_accuracy).mean()),
-        physics_loss_mean
+        physics_loss_mean,
+        boundary_loss_mean,
+        heater_loss_mean
     )
 
 
@@ -285,9 +321,56 @@ def compute_physics_loss(pred_T_norm, edge_index, batch, Q_heaters_norm, T_env_n
         nodal_residuals -= Q_heaters.view(-1)
 
     # Agrupación por grafo
-    from torch_geometric.utils import to_dense_batch
-    residuals_dense, mask = to_dense_batch(nodal_residuals.view(-1, 1), batch)
-    physics_loss = torch.mean((residuals_dense[mask]) ** 2)
+    physics_loss = scatter_mean((nodal_residuals ** 2), batch, dim=0).mean()
 
     return physics_loss
 
+def compute_boundary_loss(pred_T_norm, true_T_norm, mask_fixed):
+    """
+    Calcula el error en los nodos de condición de contorno (interfaces fijas).
+    
+    pred_T_norm: tensor [nodos] con temperaturas predichas normalizadas
+    true_T_norm: tensor [nodos] con temperaturas target normalizadas
+    mask_fixed: máscara booleana [nodos] con True donde hay condición de contorno
+    """
+    pred_fixed = pred_T_norm[mask_fixed]
+    true_fixed = true_T_norm[mask_fixed]
+
+    boundary_loss = F.mse_loss(pred_fixed, true_fixed)
+    return boundary_loss
+
+
+def compute_heater_loss(pred_T_norm, true_T_norm, Q_heaters_norm):
+    """
+    Calcula el error en los nodos donde se disipa potencia (heaters).
+    
+    pred_T_norm: tensor [nodos] con temperaturas predichas normalizadas
+    true_T_norm: tensor [nodos] con temperaturas target normalizadas
+    Q_heaters_norm: tensor [nodos] con potencias disipadas normalizadas
+    """
+    # Identificar nodos de heater (potencia disipada > 0)
+    heater_mask = Q_heaters_norm > 0
+
+    pred_heaters = pred_T_norm[heater_mask]
+    true_heaters = true_T_norm[heater_mask]
+
+    heater_loss = F.mse_loss(pred_heaters, true_heaters)
+    return heater_loss
+
+class EarlyStopping:
+    def __init__(self, patience=100):
+        self.patience = patience
+        self.best_loss = float('inf')
+        self.counter = 0
+        self.early_stop = False
+        self.best_epoch = 0
+
+    def __call__(self, val_loss, epoch):
+        if val_loss < self.best_loss:
+            self.best_loss = val_loss
+            self.counter = 0
+            self.best_epoch = epoch
+        else:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
