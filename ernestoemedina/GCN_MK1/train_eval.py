@@ -3,9 +3,25 @@ import torch.nn.functional as F
 import random
 import numpy as np
 import os
+import torch
 import matplotlib.pyplot as plt
 from torch_geometric.utils import to_dense_batch
 from torch_scatter import scatter_mean
+
+
+def load_normalization_info():
+    import os
+    local_path = "Datasets/normalization_info.pth"
+    drive_path = "/content/drive/MyDrive/ErnestoData/normalization_info.pth"
+    
+    if os.path.exists(local_path):
+        print(f"Cargando normalización desde {local_path}")
+        return torch.load(local_path)
+    elif os.path.exists(drive_path):
+        print(f"Cargando normalización desde Google Drive: {drive_path}")
+        return torch.load(drive_path)
+    else:
+        raise FileNotFoundError("No se encontró 'normalization_info.pth' ni en Datasets/ ni en Google Drive.")
 
 
 def train(model, loader, optimizer, device, use_physics=False, lambda_physics=0.003, use_boundary_loss=True, lambda_boundary=0.01, 
@@ -15,7 +31,12 @@ def train(model, loader, optimizer, device, use_physics=False, lambda_physics=0.
     total_loss = 0.0
     criterion = torch.nn.MSELoss()
     # Cargar info de normalización para la pérdida física
-    norm_info = torch.load(os.path.join("Datasets", "normalization_info.pth"))
+
+    #Para el local
+    #norm_info = torch.load(os.path.join("Datasets", "normalization_info.pth"))
+
+    #Con Colab
+    norm_info = load_normalization_info()
 
     for batch in loader:
         batch = batch.to(device)
@@ -76,7 +97,12 @@ def evaluate(model, loader, device, error_threshold, use_physics=False, use_boun
     all_physics_loss, all_boundary_loss, all_heater_loss = [], [], []
 
     # Leer info de normalización (usada tanto para plotting como física)
-    norm_info = torch.load(os.path.join("Datasets", "normalization_info.pth"))
+    #Para el local
+    #norm_info = torch.load(os.path.join("Datasets", "normalization_info.pth"))
+
+    #Con Colab
+    norm_info = load_normalization_info()
+    
     max_temp_output = norm_info["max_T_outputs"].item()
 
     with torch.no_grad():
