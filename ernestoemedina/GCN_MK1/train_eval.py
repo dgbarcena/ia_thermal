@@ -225,7 +225,13 @@ def predict(model, loader, device):
     all_pred_vals = []
 
     # Cargar info de normalización
-    norm_info = torch.load(os.path.join("Datasets", "normalization_info.pth"))
+    
+    #Para el local
+    #norm_info = torch.load(os.path.join("Datasets", "normalization_info.pth"))
+
+    #Con Colab
+    norm_info = load_normalization_info()
+    
     max_temp_output = norm_info["max_T_outputs"].item()
     max_temp_interfaces = norm_info["max_T_interfaces"].item()
 
