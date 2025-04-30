@@ -5,6 +5,20 @@ import os
 import glob
 import random
 
+def load_normalization_info():
+    
+    local_path = "Datasets/normalization_info.pth"
+    drive_path = "/content/drive/MyDrive/ErnestoData/normalization_info.pth"
+    
+    if os.path.exists(local_path):
+
+        return torch.load(local_path)
+    elif os.path.exists(drive_path):
+
+        return torch.load(drive_path)
+    else:
+        raise FileNotFoundError("No se encontró 'normalization_info.pth' ni en Datasets/ ni en Google Drive.")
+
 def generate_edge_index(grid_size):
     """
     Genera la matriz de adyacencia (edge_index) para una malla 2D cuadrada.
