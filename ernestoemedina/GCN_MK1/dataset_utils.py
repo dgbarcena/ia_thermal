@@ -9,7 +9,7 @@ import random
 def load_normalization_info():
     
     local_path = "Datasets/normalization_info.pth"
-    drive_path = "/content/drive/MyDrive/ErnestoData/normalization_info.pth"
+    drive_path = "/content/drive/MyDrive/ErnestoData/Datasets/normalization_info.pth"
     
     if os.path.exists(local_path):
 
