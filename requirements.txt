@@ -24,3 +24,4 @@ nbconvert
 # Otros importantes
 sympy
 pyyaml
+optuna
