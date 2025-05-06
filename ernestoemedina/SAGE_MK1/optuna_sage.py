@@ -6,10 +6,21 @@ from sage_model import GraphSAGE
 from train_eval import train, evaluate
 from dataset_utils import get_dataloaders_optuna
 
+try:
+    import google.colab
+    IN_COLAB = True
+except ImportError:
+    IN_COLAB = False
+
+if IN_COLAB:
+    dir_path = "/content/drive/MyDrive/ErnestoData"
+else:
+    dir_path = os.getcwd()
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def get_dataloaders(batch_size):
-    return get_dataloaders_optuna(batch_size)
+def get_dataloaders(batch_size, dir_path):
+    return get_dataloaders_optuna(batch_size, dir_path)
 
 def objective(trial):
     # --- Hiperparámetros a optimizar ---
@@ -22,7 +33,7 @@ def objective(trial):
 
 
     # --- Cargar datos ---
-    train_loader, val_loader, test_loader, input_dim = get_dataloaders(batch_size=batch_size)
+    train_loader, val_loader, test_loader, input_dim, norm_info = get_dataloaders(batch_size=batch_size, dir_path=dir_path)
 
     # --- Crear modelo ---
     model = GraphSAGE(
@@ -32,8 +43,8 @@ def objective(trial):
         num_layers=num_layers,
         use_dropout=True,
         dropout_rate=dropout_rate,
-        use_batchnorm=False,
-        use_residual=False
+        use_batchnorm=True,
+        use_residual=True
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -49,11 +60,39 @@ def objective(trial):
 
     # --- Entrenamiento + Evaluación en validación ---
     for epoch in range(50):
-        train(model, train_loader, optimizer, device)
-        val_loss, _, _, _ = evaluate(model, val_loader, device, error_threshold=1.0)
-        scheduler.step(val_loss)
+        train(
+            model,
+            train_loader,
+            optimizer,
+            device,
+            norm_info=norm_info,
+            use_physics=True,
+            lambda_physics=0.003,
+            use_boundary_loss=True,
+            lambda_boundary=1,
+            use_heater_loss=True,
+            lambda_heater=10
+        )
 
-    return val_loss  # Métrica a minimizar
+        val_metrics = evaluate(
+            model,
+            val_loader,
+            device,
+            norm_info=norm_info,
+            error_threshold=1.0,
+            use_physics=True,
+            use_boundary_loss=True,
+            use_heater_loss=True,
+            lambda_physics=0.003,
+            lambda_boundary=1,
+            lambda_heater=10
+        )
+
+        val_total_loss = val_metrics[-1]
+        scheduler.step(val_total_loss)
+
+    return val_total_loss  # Métrica a minimizar
+
 
 if __name__ == "__main__":
     study = optuna.create_study(
