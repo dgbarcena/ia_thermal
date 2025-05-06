@@ -4,7 +4,7 @@ import os
 
 #%%
 
-def load_dataset(base_path='.', folder='datasets', dataset_type=None):
+def load_dataset(base_path='.', folder='datasets', dataset_type=None, solver='transient'):
     """
     Carga un dataset .pth desde una carpeta, por defecto el dataset base completo.
     
@@ -12,21 +12,22 @@ def load_dataset(base_path='.', folder='datasets', dataset_type=None):
     - base_path: ruta base (por defecto, carpeta actual)
     - folder: subcarpeta donde están los archivos (por defecto, 'datasets')
     - dataset_type: 'train', 'test', 'val' o None (por defecto carga el dataset base completo)
+    - solver: 'transient' o 'steady' (por defecto 'transient')
     """
     if dataset_type is None:
-        filename = 'PCB_transient_dataset.pth'
+        filename = f'PCB_{solver}_dataset.pth'
     else:
         valid_types = ['train', 'test', 'val']
         if dataset_type not in valid_types:
             raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None para el dataset base.")
-        filename = f"PCB_transient_dataset_{dataset_type}.pth"
+        filename = f"PCB_{solver}_dataset_{dataset_type}.pth"
 
     full_path = os.path.join(base_path, folder, filename)
 
     if not os.path.exists(full_path):
         raise FileNotFoundError(f"❌ No se encontró el archivo: {full_path}")
 
-    print(f"✅ Cargando dataset {'base' if dataset_type is None else dataset_type} desde: {full_path}")
+    print(f"✅ Cargando {solver} dataset {'base' if dataset_type is None else dataset_type} desde: {full_path}")
     return torch.load(full_path)
 
 
@@ -197,49 +198,57 @@ class PCBDataset(Dataset):
 # -----------------------------------------------------------------------------
 class TrimmedDataset(Dataset):
     def __init__(self, base_dataset: Dataset, max_samples: int = None,
-                 time_steps_input: int = None, time_steps_output: int = None):
+                 time_steps_input: int = None, time_steps_output: int = None,
+                 solver: str = 'transient'):
+        """
+        Dataset recortado para datos estacionarios o transitorios.
+
+        Args:
+            base_dataset (Dataset): dataset base
+            max_samples (int): número máximo de muestras a devolver
+            time_steps_input (int): número de pasos temporales de entrada (solo si solver='transient')
+            time_steps_output (int): número de pasos temporales de salida (solo si solver='transient')
+            solver (str): 'steady' o 'transient'
+        """
         self.base_dataset = base_dataset
         self.max_samples = max_samples or len(base_dataset)
         self.time_steps_input = time_steps_input
         self.time_steps_output = time_steps_output
+        assert solver in ['steady', 'transient'], "solver must be 'steady' or 'transient'"
+        self.solver = solver
 
     def __len__(self):
         return min(self.max_samples, len(self.base_dataset))
 
     def __getitem__(self, idx):
-        """
-        Obtiene un ejemplo del dataset base. Si el dataset base tiene el atributo `return_bc`
-        y está activado, también devuelve las condiciones de contorno (q, t_int, t_env).
-        Si no, devuelve solo (input, output).
-
-        Además, aplica recorte temporal si se ha especificado.
-        """
-        # Activar temporalmente return_bc si existe y está en False
         if hasattr(self.base_dataset, 'return_bc') and self.base_dataset.return_bc:
             data = self.base_dataset[idx]
         else:
-            # Fuerza temporalmente return_bc a False para evitar que devuelva bcs
             original_return_bc = getattr(self.base_dataset, 'return_bc', False)
             self.base_dataset.return_bc = False
             data = self.base_dataset[idx]
             self.base_dataset.return_bc = original_return_bc
 
-        # Separar los datos en input, output y posibles condiciones de contorno
         if isinstance(data, tuple) and len(data) > 2:
             input_data, output_data, *bcs = data
         else:
             input_data, output_data = data
             bcs = []
 
-        # Recorte de la secuencia temporal del input si se ha definido
-        if self.time_steps_input is not None and input_data.ndim >= 4:
-            input_data = input_data[:self.time_steps_input]
+        if self.solver == 'transient':
+            # Solo recortar si estamos en modo transitorio
+            if self.time_steps_input is not None and input_data.ndim >= 4:
+                input_data = input_data[:self.time_steps_input]
+            if self.time_steps_output is not None and output_data.ndim >= 3:
+                output_data = output_data[:self.time_steps_output]
+            # Nota: también podrías añadir chequeos de dimensión temporal más estrictos si lo deseas
+            
+        # Asegurar que el output tenga una dimensión de canal
+        if output_data.ndim == 2:
+            output_data = output_data.unsqueeze(0)
+        elif output_data.ndim == 3 and output_data.shape[0] != 1:
+            output_data = output_data.unsqueeze(0)
 
-        # Recorte de la secuencia temporal del output si se ha definido
-        if self.time_steps_output is not None and output_data.ndim >= 3:
-            output_data = output_data[:self.time_steps_output]
-
-        # Devolver (input, output, *bcs) si existen condiciones, o solo (input, output)
         return (input_data, output_data, *bcs) if bcs else (input_data, output_data)
     
     
@@ -281,14 +290,30 @@ def load_convlstm_data_split(base_path, dataset_type, max_samples, sequence_leng
 # -----------------------------------------------------------------------------
 def load_trimmed_dataset(base_path='.', folder='datasets', dataset_type=None,
                          max_samples=None, time_steps_input=None, time_steps_output=None,
-                         to_device=False):
+                         to_device=False, solver='transient'):
+    """
+    Carga un dataset base y lo encapsula en un TrimmedDataset, compatible con casos transitorios y estacionarios.
+
+    Args:
+        base_path (str): ruta base donde está la carpeta del dataset
+        folder (str): subcarpeta donde están los archivos .pth
+        dataset_type (str): tipo de dataset ('train', 'test', 'val') o None
+        max_samples (int): número máximo de muestras a cargar
+        time_steps_input (int): número de pasos temporales de entrada (si es transitorio)
+        time_steps_output (int): número de pasos temporales de salida (si es transitorio)
+        to_device (bool): si se debe mover a CUDA (si está disponible)
+        solver (str): 'transient' o 'steady'
+
+    Returns:
+        TrimmedDataset
+    """
     if dataset_type is None:
-        filename = 'PCB_transient_dataset.pth'
+        filename = f'PCB_{solver}_dataset.pth'
     else:
         valid_types = ['train', 'test', 'val']
         if dataset_type not in valid_types:
             raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None.")
-        filename = f"PCB_transient_dataset_{dataset_type}.pth"
+        filename = f"PCB_{solver}_dataset_{dataset_type}.pth"
 
     full_path = os.path.join(base_path, folder, filename)
 
@@ -298,14 +323,15 @@ def load_trimmed_dataset(base_path='.', folder='datasets', dataset_type=None,
     print(f"✅ Cargando dataset {'base' if dataset_type is None else dataset_type} desde: {full_path}")
     base_dataset = torch.load(full_path)
 
-    # Mover a dispositivo si se pide
     if to_device and hasattr(base_dataset, 'to_device'):
         base_dataset.to_device()
         print("📦 Dataset movido a:", "CUDA" if torch.cuda.is_available() else "CPU")
 
-    return TrimmedDataset(base_dataset, max_samples=max_samples,
+    return TrimmedDataset(base_dataset,
+                          max_samples=max_samples,
                           time_steps_input=time_steps_input,
-                          time_steps_output=time_steps_output)
+                          time_steps_output=time_steps_output,
+                          solver=solver)
 
 
 # -----------------------------------------------------------------------------

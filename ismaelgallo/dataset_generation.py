@@ -18,10 +18,11 @@ if cnn_path not in sys.path:
 from PCB_solver_tr import PCB_case_2
 from Dataset_Class import PCBDataset
 
+solver = 'steady' # steady or transient
 
-n_train = 5000
-n_test = 1000
-n_validation = 500
+n_train = 100000
+n_validation = 20000
+n_test = 10000
 n_data = n_train+n_test+n_validation  
 
 nodes_side = 13
@@ -47,7 +48,7 @@ for i in range(n_data):
         print("Generating element number: ",i)
         
     # Generate the data
-    T, _, _, _ = PCB_case_2(solver = 'transient', display=False, time = time_sim, dt = dt, T_init = T_init, Q_heaters = Q_random[i], T_interfaces = T_interfaces_random[i], Tenv = T_env_random[i]) # heaters in default position
+    T, _, _, _ = PCB_case_2(solver = solver, display=False, time = time_sim, dt = dt, T_init = T_init, Q_heaters = Q_random[i], T_interfaces = T_interfaces_random[i], Tenv = T_env_random[i]) # heaters in default position
     # T = T.reshape(T.shape[0], nodes_side,nodes_side) # reshaping the data grid-shape
     
     # Append the data to the list
@@ -65,7 +66,13 @@ print("Time to generate the data: ",time_generation_data)
 # transform the lists into numpy arrays
 input = np.array(input)
 output = np.array(output)
-output = output.reshape(output.shape[0], output.shape[1], nodes_side,nodes_side) # reshaping the data grid-shape
+
+if solver == 'transient':
+    output = output.reshape(output.shape[0], output.shape[1], nodes_side,nodes_side) # reshaping the data grid-shape
+elif solver == 'steady':
+    output = output.reshape(output.shape[0], nodes_side,nodes_side) # reshaping the data grid-shape
+else:
+    raise ValueError("Solver must be 'transient' or 'steady'")
 
 input = torch.tensor(input,dtype=torch.float32)
 output = torch.tensor(output,dtype=torch.float32)
@@ -124,7 +131,12 @@ if not os.path.exists(path):
 # torch.save(dataset_val, os.path.join(path, 'PCB_transient_dataset_val.pth'))
 # torch.save(dataset, os.path.join(path, 'PCB_transient_dataset.pth'))
 
-torch.save(dataset_train, os.path.join(path, 'PCB_transient_dataset_train_reducedrange.pth'))
-torch.save(dataset_test, os.path.join(path, 'PCB_transient_dataset_test_reducedrange.pth'))
-torch.save(dataset_val, os.path.join(path, 'PCB_transient_dataset_val_reducedrange.pth'))
-torch.save(dataset, os.path.join(path, 'PCB_transient_dataset_reducedrange.pth'))
+# torch.save(dataset_train, os.path.join(path, 'PCB_transient_dataset_train_reducedrange.pth'))
+# torch.save(dataset_test, os.path.join(path, 'PCB_transient_dataset_test_reducedrange.pth'))
+# torch.save(dataset_val, os.path.join(path, 'PCB_transient_dataset_val_reducedrange.pth'))
+# torch.save(dataset, os.path.join(path, 'PCB_transient_dataset_reducedrange.pth'))
+
+torch.save(dataset_train, os.path.join(path, 'PCB_steady_dataset_train.pth'))
+torch.save(dataset_test, os.path.join(path, 'PCB_steady_dataset_test.pth'))
+torch.save(dataset_val, os.path.join(path, 'PCB_steady_dataset_val.pth'))
+torch.save(dataset, os.path.join(path, 'PCB_steady_dataset.pth'))
