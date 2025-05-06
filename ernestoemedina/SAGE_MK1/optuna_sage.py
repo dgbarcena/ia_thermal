@@ -2,7 +2,7 @@ import optuna
 import torch
 import os
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from ernestoemedina.SAGE_MK1.sage_model import GAT
+from sage_model import GraphSAGE
 from train_eval import train, evaluate
 from dataset_utils import get_dataloaders_optuna
 
@@ -18,19 +18,18 @@ def objective(trial):
     dropout_rate = trial.suggest_float("dropout_rate", 0.0, 0.2)
     lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
     batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
-    heads = trial.suggest_categorical("heads", [2, 8])
+    
 
 
     # --- Cargar datos ---
     train_loader, val_loader, test_loader, input_dim = get_dataloaders(batch_size=batch_size)
 
     # --- Crear modelo ---
-    model = GAT(
+    model = GraphSAGE(
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         output_dim=1,
         num_layers=num_layers,
-        heads=heads,
         use_dropout=True,
         dropout_rate=dropout_rate,
         use_batchnorm=False,
@@ -59,8 +58,8 @@ def objective(trial):
 if __name__ == "__main__":
     study = optuna.create_study(
         direction="minimize",
-        study_name="gat_study_2",
-        storage="sqlite:///gat_optuna_2.db",  # Persistente para dashboard
+        study_name="gcn_study_1",
+        storage="sqlite:///gcn_optuna_1.db",  # Persistente para dashboard
         load_if_exists=True
     )
 
