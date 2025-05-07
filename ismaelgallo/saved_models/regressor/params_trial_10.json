@@ -1,0 +1,11 @@
+{
+  "embedding_dim": 128,
+  "num_layers": 3,
+  "nhead": 4,
+  "dim_ff_factor": 2,
+  "dropout": 0.19384292709647452,
+  "batch_size": 8,
+  "lr": 0.0003868743772843682,
+  "weight_decay": 7.678259171940365e-06,
+  "optimizer": "RMSprop"
+}

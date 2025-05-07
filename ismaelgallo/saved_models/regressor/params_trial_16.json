@@ -1,0 +1,11 @@
+{
+  "embedding_dim": 128,
+  "num_layers": 1,
+  "nhead": 2,
+  "dim_ff_factor": 6,
+  "dropout": 0.29917563099490513,
+  "batch_size": 16,
+  "lr": 0.0005785781878420618,
+  "weight_decay": 0.008377697045803312,
+  "optimizer": "AdamW"
+}
