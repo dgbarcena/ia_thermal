@@ -161,7 +161,10 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
 
                 all_true_vals.append(true_graph.cpu())
                 all_pred_vals.append(pred_graph.cpu())
-
+                
+                #Verificar por si la GAT está haciendo algo raro
+                #print(pred_vals.min(), pred_vals.max())
+                
         # Mostrar un mapa si se pide
         if plot_results:
             true_vals_batch = true_vals.view(-1, 1)
@@ -188,6 +191,7 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
     mae_mean = float(torch.tensor(all_mae).mean())
     r2_mean = float(torch.tensor(all_r2).mean())
     acc_mean = float(torch.tensor(all_accuracy).mean())
+    #rmse_mean = np.sqrt(mse_mean)
 
     physics_loss_mean = float(torch.tensor(all_physics_loss).mean()) if use_physics else 0.0
     boundary_loss_mean = float(torch.tensor(all_boundary_loss).mean()) if use_boundary_loss else 0.0
@@ -203,7 +207,7 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
         physics_loss_mean,
         boundary_loss_mean,
         heater_loss_mean,
-        val_total_loss  
+        val_total_loss
     )
 
 
