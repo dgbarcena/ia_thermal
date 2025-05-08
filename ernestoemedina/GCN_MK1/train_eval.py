@@ -25,7 +25,7 @@ def train(model, loader, optimizer, device, norm_info, use_physics=False, lambda
         # Enmascarar condiciones de contorno (temperatura fija)
         mask = ~batch.mask_fixed_temp.view(-1)
         loss_data = criterion(out[mask], true_vals[mask])
-
+        
         # Penalización física opcional
         if use_physics:
             loss_physics = compute_physics_loss(

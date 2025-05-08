@@ -56,12 +56,12 @@ def build_graph_list(dataset, edge_index):
         graphs.append(graph)
     return graphs
 
-def get_fixed_temp_mask(x):
+def get_fixed_temp_mask(x, threshold=1e-5):
     """
     Devuelve una máscara booleana indicando qué nodos tienen temperatura fijada (input_temp ≠ 0).
     """
     # x: [N, 3] -> x[:, 0] es la temperatura de las interfaces
-    return x[:, 0] != 0
+    return x[:, 0].abs() > threshold
 
 def masked_mse_loss(pred, target, mask_fixed_temp):
     """

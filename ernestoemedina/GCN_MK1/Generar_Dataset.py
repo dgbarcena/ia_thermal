@@ -237,9 +237,9 @@ def PCB_solver_main(Lx:float,Ly:float,thickness:float,nx:int,ny:int,board_k:floa
 ##############################################################
 ################# CREACIÓN DEL DATASET #######################
 ##############################################################
-n_train = 8000
-n_test = 1000
-n_validation = 1000
+n_train = 80000
+n_test = 10000
+n_validation = 10000
 nodos_lado = 13
 
 n_entradas = n_test+n_train+n_validation
