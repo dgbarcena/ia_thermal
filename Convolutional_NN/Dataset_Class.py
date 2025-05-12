@@ -245,9 +245,12 @@ class TrimmedDataset(Dataset):
             
         # Asegurar que el output tenga una dimensión de canal
         if output_data.ndim == 2:
-            output_data = output_data.unsqueeze(0)
-        elif output_data.ndim == 3 and output_data.shape[0] != 1:
-            output_data = output_data.unsqueeze(0)
+            # caso (H, W) → (1, 1, H, W)
+            output_data = output_data.unsqueeze(0).unsqueeze(1)
+        elif output_data.ndim == 3:
+            # caso (T, H, W) → (T, 1, H, W)
+            output_data = output_data.unsqueeze(1)
+        # si ya es 4D y la segunda dim es 1, mantenemos (T,1,H,W)
 
         return (input_data, output_data, *bcs) if bcs else (input_data, output_data)
     
