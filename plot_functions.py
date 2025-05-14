@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.patches import Rectangle
+from matplotlib.animation import PillowWriter
 import os
 
 #%%
@@ -492,15 +493,16 @@ def generar_gif_pcb_comparacion(model_preds, solver_data, dt=1, nombre_archivo="
     # Crear animación (¡sin blit!)
     ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=interval_ms, blit=False)
 
-    if nombre_archivo:
+    if nombre_archivo and guardar_en_figures:
         base_path = os.getcwd()
-        carpeta = os.path.join(base_path, "figures") if guardar_en_figures else base_path
+        carpeta = os.path.join(base_path, "figures")
         os.makedirs(carpeta, exist_ok=True)
         ruta_salida = os.path.join(carpeta, f"{nombre_archivo}.gif")
+        print(f"Guardando gif en: {ruta_salida}")
         ani.save(ruta_salida, writer='pillow', fps=fps, savefig_kwargs={'facecolor': 'white'})
-        plt.close()
-    else:
-        plt.close()
+        print("Gif guardado.")
+    plt.close()
+    
     return ani
 
 
@@ -579,6 +581,82 @@ def generar_gif_error_evolucion(model_preds, solver_data, dt=1, nombre_archivo="
         os.makedirs(carpeta, exist_ok=True)
         ruta_salida = os.path.join(carpeta, f"{nombre_archivo}.gif")
         ani.save(ruta_salida, writer='pillow', fps=fps, savefig_kwargs={'facecolor': 'white'})
+        plt.close()
+    else:
+        plt.close()
+
+    return ani
+
+#%%
+def generar_gif_temperatura(temperaturas, dt=1.0, nombre_archivo="temperatura_evolucion",
+                        guardar_en_figures=False, duracion_total=10.0):
+    """
+    Genera un GIF mostrando la evolución de la temperatura en el tiempo.
+
+    Args:
+        temperaturas (np.ndarray): Array (T, H, W) con la evolución temporal de la temperatura.
+        dt (float): Paso temporal entre frames (en segundos).
+        nombre_archivo (str or None): Nombre base del archivo (sin extensión). Si None, no se guarda.
+        guardar_en_figures (bool): Si True, guarda el gif en la carpeta 'figures/' junto al notebook.
+        duracion_total (float): Duración total del gif en segundos.
+
+    Returns:
+        ani (matplotlib.animation.FuncAnimation): Objeto de animación para uso en Jupyter.
+    """
+    assert temperaturas.ndim == 3, "temperaturas debe tener forma (T, H, W)"
+    total_frames = temperaturas.shape[0]
+
+    # Calcular fps e intervalo para lograr la duración deseada
+    fps = total_frames / duracion_total
+    interval_ms = 1000 / fps # Cambio importante aquí
+
+    # Crear figura
+    fig, ax = plt.subplots(figsize=(5, 5))
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
+
+    vmin = temperaturas.min()
+    vmax = temperaturas.max()
+    im = ax.imshow(temperaturas[0], vmin=vmin, vmax=vmax, cmap='hot')
+    ax.set_title("Temperatura", fontsize=14, color='black')
+    ax.axis('off')
+
+    # Barra de color
+    cbar_ax = fig.add_axes([0.88, 0.2, 0.03, 0.6])
+    cbar = plt.colorbar(im, cax=cbar_ax)
+    cbar.ax.yaxis.set_tick_params(color='black')
+    plt.setp(cbar.ax.yaxis.get_ticklabels(), color='black', fontsize=10)
+
+    # Barra de progreso
+    progress_ax = fig.add_axes([0.25, 0.01, 0.5, 0.02])
+    progress_ax.set_xlim(0, 1)
+    progress_ax.set_ylim(0, 1)
+    progress_ax.axis('off')
+    background_bar = Rectangle((0, 0), 1, 1, color='lightgray')
+    progress_bar = Rectangle((0, 0), 0, 1, color='red')
+    progress_ax.add_patch(background_bar)
+    progress_ax.add_patch(progress_bar)
+
+    # Texto del tiempo
+    tiempo_num = fig.text(0.5, 0.045, "0.00 s", ha='center', va='bottom', fontsize=18, color='black')
+
+    # Función de actualización
+    def update(frame):
+        im.set_data(temperaturas[frame])
+        tiempo_actual = frame * dt
+        progress_bar.set_width((frame + 1) / total_frames)
+        tiempo_num.set_text(f"{tiempo_actual:.2f} s")
+        return im, progress_bar, tiempo_num
+
+    ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=interval_ms, blit=False)
+
+    if nombre_archivo:
+        base_path = os.getcwd()
+        carpeta = os.path.join(base_path, "figures") if guardar_en_figures else base_path
+        os.makedirs(carpeta, exist_ok=True)
+        ruta_salida = os.path.join(carpeta, f"{nombre_archivo}.gif")
+        writer = PillowWriter(fps=fps)
+        ani.save(ruta_salida, writer=writer, savefig_kwargs={'facecolor': 'white'})
         plt.close()
     else:
         plt.close()
