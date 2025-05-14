@@ -1,10 +1,11 @@
 import torch
 from torch.utils.data import Dataset, TensorDataset
 import os
+import numpy as np
 
 #%%
 
-def load_dataset(base_path='.', folder='datasets', dataset_type=None, solver='transient'):
+def load_dataset_mlp(base_path='.', folder='datasets', dataset_type=None, solver='transient'):
     """
     Carga un dataset .pth desde una carpeta, por defecto el dataset base completo.
     
@@ -15,19 +16,19 @@ def load_dataset(base_path='.', folder='datasets', dataset_type=None, solver='tr
     - solver: 'transient' o 'steady' (por defecto 'transient')
     """
     if dataset_type is None:
-        filename = f'PCB_{solver}_dataset.pth'
+        filename = f'PCB_mlp_{solver}_dataset.pth'
     else:
         valid_types = ['train', 'test', 'val']
         if dataset_type not in valid_types:
             raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None para el dataset base.")
-        filename = f"PCB_{solver}_dataset_{dataset_type}.pth"
+        filename = f"PCB_mlp_{solver}_dataset_{dataset_type}.pth"
 
     full_path = os.path.join(base_path, folder, filename)
 
     if not os.path.exists(full_path):
         raise FileNotFoundError(f"❌ No se encontró el archivo: {full_path}")
 
-    print(f"✅ Cargando {solver} dataset {'base' if dataset_type is None else dataset_type} desde: {full_path}")
+    print(f"✅ Cargando mlp {solver} dataset {'base' if dataset_type is None else dataset_type} desde: {full_path}")
     return torch.load(full_path)
 
 
@@ -39,10 +40,10 @@ def load_dataset(base_path='.', folder='datasets', dataset_type=None, solver='tr
 # (adapted for the mlp model)
 # -----------------------------------------------------------------------------
 class PCBDataset_mlp(Dataset):
-    def __init__(self,T_interfaces:torch.tensor,Q_heaters:torch.tensor,T_env:torch.tensor,T_outputs:torch.tensor,
+    def __init__(self,T_interfaces:torch.tensor,Q_heaters:torch.tensor,T_env:torch.tensor, time:torch.tensor,T_outputs:torch.tensor,
                  T_interfaces_mean:torch.tensor,T_interfaces_std:torch.tensor,Q_heaters_mean:torch.tensor,
-                 Q_heaters_std:torch.tensor,T_env_mean:torch.tensor,T_env_std:torch.tensor,T_outputs_mean:torch.tensor,
-                 T_outputs_std:torch.tensor,
+                 Q_heaters_std:torch.tensor,T_env_mean:torch.tensor,T_env_std:torch.tensor, time_mean:torch.tensor, 
+                 time_std:torch.tensor, T_outputs_mean:torch.tensor, T_outputs_std:torch.tensor,
                  return_bc:bool = False):
         
         # print("T_interfaces shape: ", T_interfaces.shape)
@@ -60,8 +61,10 @@ class PCBDataset_mlp(Dataset):
         self.T_outputs_std = T_outputs_std
         self.T_env_mean = T_env_mean
         self.T_env_std = T_env_std
+        self.time_mean = time_mean
+        self.time_std = time_std
 
-        self.inputs = torch.empty([9])
+        self.inputs = torch.empty([10]) # 4 + 4 + 1 + 1 = 10
         
         # print("T_interfaces shape: ", T_interfaces.shape)
 
@@ -71,18 +74,26 @@ class PCBDataset_mlp(Dataset):
         self.T_interfaces = (T_interfaces-T_interfaces_mean)/T_interfaces_std
         self.Q_heaters = (Q_heaters-Q_heaters_mean)/Q_heaters_std
         self.T_env= (T_env-T_env_mean)/T_env_std
+        self.time = (time-time_mean)/time_std
         self.outputs = (T_outputs-T_outputs_mean)/T_outputs_std
         
-        self.inputs = torch.empty((T_interfaces.shape[0], 9), dtype=torch.float32)
+        self.inputs = torch.empty((T_interfaces.shape[0], 10), dtype=torch.float32)
         
         self.inputs[..., :4] = self.T_interfaces
         self.inputs[..., 4:8] = self.Q_heaters
         self.inputs[..., 8] = self.T_env
+        self.inputs[..., 9] = self.time 
         
     def denormalize_T_interfaces(self,x):
         tensor_device = x.device
         mean = self.T_interfaces_mean.to(tensor_device)
         std = self.T_interfaces_std.to(tensor_device)
+        return x*std+mean
+    
+    def denormalize_time(self,x):
+        tensor_device = x.device
+        mean = self.time_mean.to(tensor_device)
+        std = self.time_std.to(tensor_device)
         return x*std+mean
     
     def denormalize_input(self, x):
@@ -97,34 +108,40 @@ class PCBDataset_mlp(Dataset):
         x_denorm[:4] = self.denormalize_T_interfaces(x[:4].to(device))
         x_denorm[4:8] = self.denormalize_Q_heaters(x[4:8].to(device))
         x_denorm[8] = self.denormalize_T_env(x[8].to(device))
+        x_denorm[9] = self.denormalize_time(x[9].to(device))
 
         return x_denorm
     
-    def create_input_from_values(self, Q_heaters, T_interfaces, T_env, sequence_length=1001):
+    def create_input_from_values(self, Q_heaters, T_interfaces, T_env, time, sequence_length=1001):
         """
         Crea un input normalizado de forma (9) a partir de:
         - Q_heaters: np.array de shape (4)
         - T_interfaces: np.array de shape (4)
         - T_env: float o escalar
-
-        Devuelve: tensor (9)
-        """
+        - time: float o escalar
+        - sequence_length: longitud de la secuencia (por defecto 1001)
+        
+        Devuelve un tensor normalizado de forma (9)
+"""
         
         # Convertir a tensores
         Q_heaters = torch.tensor(Q_heaters, dtype=torch.float32)
         T_interfaces = torch.tensor(T_interfaces, dtype=torch.float32)
         T_env = torch.tensor(T_env, dtype=torch.float32)
+        time = torch.tensor(time, dtype=torch.float32)
 
         # Normalizar
         Q_norm = (Q_heaters - self.Q_heaters_mean) / self.Q_heaters_std
         T_int_norm = (T_interfaces - self.T_interfaces_mean) / self.T_interfaces_std
         T_env_norm = (T_env - self.T_env_mean) / self.T_env_std
+        time_norm = (time - self.time_mean) / self.time_std
         
-        # crear tensor de entrada (9)
-        input_tensor = torch.empty((9), dtype=torch.float32)
+        # crear tensor de entrada (10)
+        input_tensor = torch.empty((10), dtype=torch.float32)
         input_tensor[:4] = T_int_norm
         input_tensor[4:8] = Q_norm
         input_tensor[8] = T_env_norm
+        input_tensor[9] = time_norm
         
 
         return input_tensor.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
@@ -158,7 +175,8 @@ class PCBDataset_mlp(Dataset):
             t_int = self.denormalize_T_interfaces(self.T_interfaces[idx])
             q_heat = self.denormalize_Q_heaters(self.Q_heaters[idx])
             t_env = self.denormalize_T_env(self.T_env[idx])
-            return input_data, output_data, q_heat, t_int, t_env
+            time = self.denormalize_time(self.time[idx])
+            return input_data, output_data, q_heat, t_int, t_env, time
 
         return input_data, output_data
     
@@ -173,108 +191,71 @@ class PCBDataset_mlp(Dataset):
 # -----------------------------------------------------------------------------
 # TrimmedDataset: Wrapper para recorte eficiente de muestras y tiempo
 # -----------------------------------------------------------------------------
-class TrimmedDataset(Dataset):
-    def __init__(self, base_dataset: Dataset, max_samples: int = None,
-                 time_steps_input: int = None, time_steps_output: int = None,
-                 solver: str = 'transient'):
+class TrimmedDataset_mlp(Dataset):
+    def __init__(self, base_dataset: Dataset, max_cases: int = None, time_steps_per_case: int = 1001):
         """
-        Dataset recortado para datos estacionarios o transitorios.
+        Dataset recortado para MLP, cada muestra es un paso temporal individual.
 
         Args:
-            base_dataset (Dataset): dataset base
-            max_samples (int): número máximo de muestras a devolver
-            time_steps_input (int): número de pasos temporales de entrada (solo si solver='transient')
-            time_steps_output (int): número de pasos temporales de salida (solo si solver='transient')
-            solver (str): 'steady' o 'transient'
+            base_dataset (Dataset): dataset base que retorna muestras individuales ordenadas por casos y tiempo.
+            max_cases (int): número máximo de casos a devolver.
+            time_steps_per_case (int): número de pasos temporales por caso.
         """
         self.base_dataset = base_dataset
-        self.max_samples = max_samples or len(base_dataset)
-        self.time_steps_input = time_steps_input
-        self.time_steps_output = time_steps_output
-        assert solver in ['steady', 'transient'], "solver must be 'steady' or 'transient'"
-        self.solver = solver
+        self.time_steps_per_case = time_steps_per_case
+        total_cases = len(base_dataset) // time_steps_per_case
+        self.max_cases = max_cases or total_cases
+        self.length = self.max_cases * self.time_steps_per_case
 
     def __len__(self):
-        return min(self.max_samples, len(self.base_dataset))
+        return self.length
 
     def __getitem__(self, idx):
-        if hasattr(self.base_dataset, 'return_bc') and self.base_dataset.return_bc:
-            data = self.base_dataset[idx]
-        else:
-            original_return_bc = getattr(self.base_dataset, 'return_bc', False)
-            self.base_dataset.return_bc = False
-            data = self.base_dataset[idx]
-            self.base_dataset.return_bc = original_return_bc
+        return self.base_dataset[idx]
 
-        if isinstance(data, tuple) and len(data) > 2:
-            input_data, output_data, *bcs = data
-        else:
-            input_data, output_data = data
-            bcs = []
 
-        if self.solver == 'transient':
-            # Solo recortar si estamos en modo transitorio
-            if self.time_steps_input is not None and input_data.ndim >= 4:
-                input_data = input_data[:self.time_steps_input]
-            if self.time_steps_output is not None and output_data.ndim >= 3:
-                output_data = output_data[:self.time_steps_output]
-            # Nota: también podrías añadir chequeos de dimensión temporal más estrictos si lo deseas
-            
-        # Asegurar que el output tenga una dimensión de canal
-        if output_data.ndim == 2:
-            # caso (H, W) → (1, 1, H, W)
-            output_data = output_data.unsqueeze(0).unsqueeze(1)
-        elif output_data.ndim == 3:
-            # caso (T, H, W) → (T, 1, H, W)
-            output_data = output_data.unsqueeze(1)
-        # si ya es 4D y la segunda dim es 1, mantenemos (T,1,H,W)
-
-        return (input_data, output_data, *bcs) if bcs else (input_data, output_data)
-    
-# -----------------------------------------------------------------------------
-# load_trimmed_dataset: Carga y recorta dataset desde .pth
-# -----------------------------------------------------------------------------
-def load_trimmed_dataset(base_path='.', folder='datasets', dataset_type=None,
-                         max_samples=None, time_steps_input=None, time_steps_output=None,
+def load_trimmed_dataset_mlp(base_path='.', folder='datasets', dataset_type=None,
+                         max_cases=None, time_steps_per_case=1001,
                          to_device=False, solver='transient'):
     """
-    Carga un dataset base y lo encapsula en un TrimmedDataset, compatible con casos transitorios y estacionarios.
+    Carga un dataset base y lo recorta en número de casos para MLP (cada muestra es un paso temporal individual).
 
     Args:
-        base_path (str): ruta base donde está la carpeta del dataset
-        folder (str): subcarpeta donde están los archivos .pth
-        dataset_type (str): tipo de dataset ('train', 'test', 'val') o None
-        max_samples (int): número máximo de muestras a cargar
-        time_steps_input (int): número de pasos temporales de entrada (si es transitorio)
-        time_steps_output (int): número de pasos temporales de salida (si es transitorio)
-        to_device (bool): si se debe mover a CUDA (si está disponible)
-        solver (str): 'transient' o 'steady'
+        base_path (str): ruta base donde está la carpeta del dataset.
+        folder (str): subcarpeta donde están los archivos .pth.
+        dataset_type (str): 'train', 'test', 'val' o None para archivo genérico.
+        max_cases (int): número máximo de casos a devolver.
+        time_steps_per_case (int): número de pasos temporales por caso en el dataset base.
+        to_device (bool): si mover el dataset base a GPU si tiene método `to_device()`.
+        solver (str): 'transient' o 'steady'.
 
     Returns:
-        TrimmedDataset
+        TrimmedDataset_mlp: dataset recortado.
     """
+    # Determinar nombre de archivo
     if dataset_type is None:
-        filename = f'PCB_{solver}_dataset.pth'
+        filename = f'PCB_mlp_{solver}_dataset.pth'
     else:
-        valid_types = ['train', 'test', 'val']
-        if dataset_type not in valid_types:
-            raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None.")
-        filename = f"PCB_{solver}_dataset_{dataset_type}.pth"
+        valid = ['train', 'test', 'val']
+        if dataset_type not in valid:
+            raise ValueError(f"Tipo de dataset inválido: {dataset_type}. Usar uno de {valid}")
+        filename = f'PCB_mlp_{solver}_dataset_{dataset_type}.pth'
 
     full_path = os.path.join(base_path, folder, filename)
-
     if not os.path.exists(full_path):
-        raise FileNotFoundError(f"❌ No se encontró el archivo: {full_path}")
+        raise FileNotFoundError(f"No se encontró el archivo: {full_path}")
 
-    print(f"✅ Cargando dataset {'base' if dataset_type is None else dataset_type} desde: {full_path}")
+    print(f"Cargando dataset base desde: {full_path}")
     base_dataset = torch.load(full_path)
+    if isinstance(base_dataset, tuple):
+        base_dataset = TensorDataset(base_dataset[0], base_dataset[1])
 
     if to_device and hasattr(base_dataset, 'to_device'):
         base_dataset.to_device()
-        print("📦 Dataset movido a:", "CUDA" if torch.cuda.is_available() else "CPU")
+        print("Dataset movido a GPU/CPU según disponibilidad")
 
-    return TrimmedDataset(base_dataset,
-                          max_samples=max_samples,
-                          time_steps_input=time_steps_input,
-                          time_steps_output=time_steps_output,
-                          solver=solver)
+    return TrimmedDataset_mlp(
+        base_dataset=base_dataset,
+        max_cases=max_cases,
+        time_steps_per_case=time_steps_per_case
+    )

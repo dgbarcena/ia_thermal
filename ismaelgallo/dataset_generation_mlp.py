@@ -21,46 +21,52 @@ from PCB_solver_tr import PCB_case_2
 
 solver = 'transient' # steady or transient
 
-n_train = 100000
-n_validation = 30000
-n_test = 10000
-n_data = n_train+n_test+n_validation  
+n_train = 30000
+n_validation = 3000
+n_test = 500
+n_cases = n_train+n_test+n_validation  
+
 
 nodes_side = 13
 time_sim = 1000
+seq_len = time_sim+1
 dt = 1
 T_init = 298.0
 
-input = []
-output = []
+n_data = n_cases*seq_len
+train_data = n_train*seq_len
+validation_data = n_validation*seq_len
+test_data = n_test*seq_len
+
+input = np.empty((n_data, 10))
+output = np.empty((n_data, nodes_side*nodes_side))
 
 np.random.seed(0)
 
-Q_random = np.random.uniform(0.5, 1.0, (n_data, 4))
-T_interfaces_random = np.random.uniform(280, 310, (n_data, 4))
-T_env_random = np.random.uniform(280, 310, n_data)
+Q_random = np.random.uniform(0.5, 1.0, (n_cases, 4))
+T_interfaces_random = np.random.uniform(280, 310, (n_cases, 4))
+T_env_random = np.random.uniform(280, 310, n_cases)
+time_column = np.arange(seq_len).reshape(-1, 1)  # Forma (seq_len, 1)
 
 time_start = time.time()
 
-for i in range(n_data):
+print(F"Generating {n_cases} cases of {seq_len} steps each = {n_data} data")
+
+for i in range(n_cases):
     
     # Print iteration number
-    if i%200 == 0:
-        print("Generating element number: ",i)
+    if i%100 == 0:
+        print("Generating case number: ", i)
         
     # Generate the data
-    T, _, _, _ = PCB_case_2(solver = solver, display=False, time = time_sim, dt = dt, T_init = T_init, Q_heaters = Q_random[i], T_interfaces = T_interfaces_random[i], Tenv = T_env_random[i]) # heaters in default position
-    # T = T.reshape(T.shape[0], nodes_side,nodes_side) # reshaping the data grid-shape
+    T, time_solv, _, _ = PCB_case_2(solver = solver, display=False, time = time_sim, dt = dt, T_init = T_init, Q_heaters = Q_random[i], T_interfaces = T_interfaces_random[i], Tenv = T_env_random[i]) # heaters in default position
     
     # Append the data to the list
-    output.append(T)
-    input1 = []
-    
-    # print(T_interfaces_random[i],Q_random[i],T_env_random[i]) # DEBUGGING
-    
-    input1 = np.concatenate((T_interfaces_random[i],Q_random[i],[T_env_random[i]]),axis=0)
-    # print(input1) # DEBUGGING
-    input.append(input1)
+    output[i*seq_len:(i+1)*seq_len, :] = T # output is the temperature at each time step
+    input1 = np.concatenate((T_interfaces_random[i],Q_random[i],[T_env_random[i]]),axis=0) # input1 is the input data for the case
+    input1 =  np.tile(input1, (seq_len, 1)) # input1 is the input data for the case
+    input1 = np.hstack((input1, time_column))  # Combina input1 con la nueva columna
+    input[i*seq_len:(i+1)*seq_len, :] = input1 # input is the temperature at each time step
     
 time_end = time.time()
 time_generation_data = time_end-time_start
@@ -70,61 +76,35 @@ print("Time to generate the data: ", time_generation_data)
 input = np.array(input)
 output = np.array(output)
 
-# if solver == 'transient':
-#     output = output.reshape(output.shape[0], output.shape[1]) # reshaping the data grid-shape
-# elif solver == 'steady':
-#     output = output.reshape(output.shape[0], nodes_side,nodes_side) # reshaping the data grid-shape
-# else:
-#     raise ValueError("Solver must be 'transient' or 'steady'")
-
 input = torch.tensor(input,dtype=torch.float32)
 output = torch.tensor(output,dtype=torch.float32)
 
-T_interfaces = np.zeros((n_data, 4))
-Q_heaters = np.zeros((n_data, 4))
-T_env = np.zeros((n_data))
+Q_random = input[:, :4]
+T_interfaces_random = input[:, 4:8]
+T_env_random = input[:, 8]
+time_column = input[:, 9]
 
-# for i in range(n_data):
-#     Q_heaters[i] = Q_random[i]
-#     T_interfaces[i] = T_interfaces_random[i]
-#     T_env[i,:,:] = T_env_random[i]
-
-# Q_random_shape = Q_random.shape
-# print("Q_random shape: ", Q_random_shape)
-    
-Q_heaters = torch.tensor(Q_random,dtype=torch.float32)
-T_interfaces = torch.tensor(T_interfaces_random,dtype=torch.float32)
-T_env = torch.tensor(T_env_random,dtype=torch.float32)
-
-# print("Q_heaters shape: ", Q_heaters.shape)
-# print("T_env shape: ", T_env.shape)
+Q_heaters = Q_random.clone().detach().float()
+T_interfaces = T_interfaces_random.clone().detach().float()
+T_env = T_env_random.clone().detach().float()
+sequence_length = time_column.clone().detach().float()
 
 # calculate averages and standard deviations
 T_interfaces_mean = T_interfaces.mean() # careful because calculated with lots of zeros
 T_interfaces_std = T_interfaces.std()
 Q_heaters_mean = Q_heaters.mean() # careful because calculated with lots of zeros
-# print("Q_heaters_mean: ", Q_heaters_mean)
 Q_heaters_std = Q_heaters.std()
 T_env_mean = T_env.mean()
 T_env_std = T_env.std()
 output_mean = output.mean() 
 output_std = output.std()
+seq_len_mean = sequence_length.mean()
+seq_len_std = sequence_length.std()
 
-# print("T_interfaces_mean: ", T_interfaces_mean)
-# print("T_interfaces_std: ", T_interfaces_std)
-# print("Q_heaters_mean: ", Q_heaters_mean)
-# print("Q_heaters_std: ", Q_heaters_std)
-# print("T_env_mean: ", T_env_mean)
-# print("T_env_std: ", T_env_std)
-# print("output_mean: ", output_mean)
-# print("output_std: ", output_std)
-
-# print("T_interfaces shape fuera: ", T_interfaces.shape)
-dataset = PCBDataset_mlp(T_interfaces, Q_heaters, T_env, output, T_interfaces_mean, T_interfaces_std, Q_heaters_mean, Q_heaters_std, T_env_mean, T_env_std, output_mean, output_std)
-
-dataset_train = dataset[:n_train]
-dataset_test = dataset[n_train:n_train+n_test]
-dataset_val = dataset[n_train+n_test:n_train+n_test+n_validation]
+dataset = PCBDataset_mlp(T_interfaces, Q_heaters, T_env, sequence_length, output, T_interfaces_mean, T_interfaces_std, Q_heaters_mean, Q_heaters_std, T_env_mean, T_env_std, seq_len_mean, seq_len_std, output_mean, output_std)
+dataset_train = dataset[:train_data]
+dataset_test = dataset[train_data:train_data+test_data]
+dataset_val = dataset[train_data+test_data:]
 
 
 # path directorie for saving datasets
