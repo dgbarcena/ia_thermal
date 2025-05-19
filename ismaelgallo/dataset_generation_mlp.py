@@ -21,9 +21,9 @@ from PCB_solver_tr import PCB_case_2
 
 solver = 'transient' # steady or transient
 
-n_train = 30000
-n_validation = 3000
-n_test = 500
+n_train = 1500
+n_validation = 300
+n_test = 50
 n_cases = n_train+n_test+n_validation  
 
 
