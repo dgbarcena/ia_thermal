@@ -61,8 +61,8 @@ def UNET_finetuning_train(pretrained_model:str,epochs:int,n_train:int=1000,batch
     dataset_test:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_test_finetuning.pth'),weights_only=False)
     dataset_train:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_train_finetuning.pth'),weights_only=False)
 
-    dataset_train.to_cuda()
-    dataset_test.to_cuda()
+    #dataset_train.to_cuda()
+    #dataset_test.to_cuda()
 
     n_test = dataset_test.inputs.size(0)
     train_sampler = SubsetRandomSampler(list(range(n_train)))

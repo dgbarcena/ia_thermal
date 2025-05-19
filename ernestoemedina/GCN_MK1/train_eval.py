@@ -3,19 +3,18 @@ import torch.nn.functional as F
 import random
 import numpy as np
 import os
+import torch
 import matplotlib.pyplot as plt
 from torch_geometric.utils import to_dense_batch
 from torch_scatter import scatter_mean
 
 
-def train(model, loader, optimizer, device, use_physics=False, lambda_physics=0.003, use_boundary_loss=True, lambda_boundary=0.01, 
+def train(model, loader, optimizer, device, norm_info, use_physics=False, lambda_physics=0.003, use_boundary_loss=True, lambda_boundary=0.01, 
           use_heater_loss=True, lambda_heater=0.01):
     
     model.train()
     total_loss = 0.0
     criterion = torch.nn.MSELoss()
-    # Cargar info de normalización para la pérdida física
-    norm_info = torch.load(os.path.join("Datasets", "normalization_info.pth"))
 
     for batch in loader:
         batch = batch.to(device)
@@ -26,7 +25,7 @@ def train(model, loader, optimizer, device, use_physics=False, lambda_physics=0.
         # Enmascarar condiciones de contorno (temperatura fija)
         mask = ~batch.mask_fixed_temp.view(-1)
         loss_data = criterion(out[mask], true_vals[mask])
-
+        
         # Penalización física opcional
         if use_physics:
             loss_physics = compute_physics_loss(
@@ -68,15 +67,15 @@ def train(model, loader, optimizer, device, use_physics=False, lambda_physics=0.
 
 
 
-def evaluate(model, loader, device, error_threshold, use_physics=False, use_boundary_loss=True, use_heater_loss=True, percentage_threshold=None, plot_results=False):
+def evaluate(model, loader, device, norm_info, error_threshold, use_physics=False, lambda_physics = 0.003,
+             use_boundary_loss=True, lambda_boundary = 0.01, use_heater_loss=True, lambda_heater = 0.01, 
+             percentage_threshold=None, plot_results=False):
     model.eval()
 
     all_mse, all_mae, all_r2, all_accuracy = [], [], [], []
     all_true_vals, all_pred_vals = [], []
     all_physics_loss, all_boundary_loss, all_heater_loss = [], [], []
-
-    # Leer info de normalización (usada tanto para plotting como física)
-    norm_info = torch.load(os.path.join("Datasets", "normalization_info.pth"))
+    
     max_temp_output = norm_info["max_T_outputs"].item()
 
     with torch.no_grad():
@@ -100,6 +99,8 @@ def evaluate(model, loader, device, error_threshold, use_physics=False, use_boun
                     norm_info=norm_info
                 )
                 all_physics_loss.append(loss_physics.item())
+            else:
+                loss_physics = torch.tensor(0.0)
             
             if use_boundary_loss:
                 loss_boundary = compute_boundary_loss(
@@ -108,6 +109,8 @@ def evaluate(model, loader, device, error_threshold, use_physics=False, use_boun
                     mask_fixed=mask_fixed
                 )
                 all_boundary_loss.append(loss_boundary.item())
+            else:
+                loss_boundary = torch.tensor(0.0)
                 
             if use_heater_loss:
                 loss_heater = compute_heater_loss(
@@ -116,6 +119,8 @@ def evaluate(model, loader, device, error_threshold, use_physics=False, use_boun
                     Q_heaters_norm=data.x[:, 2]
                 )
                 all_heater_loss.append(loss_heater.item())
+            else:
+                loss_heater = torch.tensor(0.0)
             
             total_nodos = true_vals.shape[0]
             nodos_por_grafico = data.num_nodes
@@ -178,28 +183,36 @@ def evaluate(model, loader, device, error_threshold, use_physics=False, use_boun
             else:
                 print("No se encontró ninguna muestra con número de nodos cuadrado perfecto para graficar.")
 
-    physics_loss_mean = float(torch.tensor(all_physics_loss).mean()) if use_physics else None
-    boundary_loss_mean = float(torch.tensor(all_boundary_loss).mean()) if use_boundary_loss else None
-    heater_loss_mean = float(torch.tensor(all_heater_loss).mean()) if use_heater_loss else None
+    # Promedios
+    mse_mean = float(torch.tensor(all_mse).mean())
+    mae_mean = float(torch.tensor(all_mae).mean())
+    r2_mean = float(torch.tensor(all_r2).mean())
+    acc_mean = float(torch.tensor(all_accuracy).mean())
+    #rmse_mean = np.sqrt(mse_mean)
+
+    physics_loss_mean = float(torch.tensor(all_physics_loss).mean()) if use_physics else 0.0
+    boundary_loss_mean = float(torch.tensor(all_boundary_loss).mean()) if use_boundary_loss else 0.0
+    heater_loss_mean = float(torch.tensor(all_heater_loss).mean()) if use_heater_loss else 0.0
+    # Pérdida total combinada (para EarlyStopping)
+    val_total_loss = mse_mean + lambda_physics * physics_loss_mean + lambda_boundary * boundary_loss_mean + lambda_heater * heater_loss_mean
 
     return (
-        float(torch.tensor(all_mse).mean()),
-        float(torch.tensor(all_mae).mean()),
-        float(torch.tensor(all_r2).mean()),
-        float(torch.tensor(all_accuracy).mean()),
+        mse_mean,
+        mae_mean,
+        r2_mean,
+        acc_mean,
         physics_loss_mean,
         boundary_loss_mean,
-        heater_loss_mean
+        heater_loss_mean,
+        val_total_loss
     )
 
 
 
-def predict(model, loader, device):
+def predict(model, loader, device, norm_info):
     model.eval()
     all_pred_vals = []
-
-    # Cargar info de normalización
-    norm_info = torch.load(os.path.join("Datasets", "normalization_info.pth"))
+    
     max_temp_output = norm_info["max_T_outputs"].item()
     max_temp_interfaces = norm_info["max_T_interfaces"].item()
 

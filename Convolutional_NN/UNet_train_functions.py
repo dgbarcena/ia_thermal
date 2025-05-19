@@ -53,8 +53,8 @@ def UNET_train(epochs:int,n_train:int=1000,batch_size:int=5,lr0:float=0.0001,ove
     dataset_test:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_test.pth'))
     dataset_train:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_train.pth'))
 
-    dataset_train.to_cuda()
-    dataset_test.to_cuda()
+    #dataset_train.to_cuda()
+    #dataset_test.to_cuda()
 
     n_test = dataset_test.inputs.size(0)
     train_sampler = SubsetRandomSampler(list(range(n_train)))
@@ -181,8 +181,8 @@ def UNET_train_physics(epochs:int,n_train:int=1000,batch_size:int=5,lr0:float=0.
     dataset_test:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_test.pth'),weights_only=False)
     dataset_train:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_train.pth'),weights_only=False)
 
-    dataset_train.to_cuda()
-    dataset_test.to_cuda()
+    #dataset_train.to_cuda()
+    #dataset_test.to_cuda()
 
     n_test = dataset_test.inputs.size(0)
     train_sampler = SubsetRandomSampler(list(range(n_train)))
