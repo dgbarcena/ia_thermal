@@ -29,13 +29,38 @@ def generate_edge_index(grid_size):
 
     return torch.tensor(edge_index, dtype=torch.long).t().contiguous()
 
+def generate_edge_attr(grid_size, edge_index):
+    """
+    Genera edge_attr = [GR, GLx, GLy] para cada arista de la malla.
+    """
+    # Constantes físicas
+    L = 0.1  # m
+    thickness = 0.001  # m
+    board_k = 15  # W/(K*m)
+    ir_emissivity = 0.8
+    n = grid_size
+
+    dx = L / (n - 1)
+    dy = L / (n - 1)
+    GLx = thickness * board_k * dy / dx
+    GLy = thickness * board_k * dx / dy
+    GR = 2 * dx * dy * ir_emissivity
+
+    edge_attr = []
+    for src, dst in edge_index.t().tolist():
+        x1, y1 = src % grid_size, src // grid_size
+        x2, y2 = dst % grid_size, dst // grid_size
+        if x1 != x2:  # desplazamiento en x
+            edge_attr.append([GR, GLx, 0.0])
+        else:  # desplazamiento en y
+            edge_attr.append([GR, 0.0, GLy])
+    return torch.tensor(edge_attr, dtype=torch.float)
 
 
-def build_graph_from_sample(dataset, idx, edge_index):
+def build_graph_from_sample(dataset, idx, edge_index, edge_attr):
     """
     Convierte una muestra en un grafo PyG: x ∈ [nxn, 3], y ∈ [nxn, 1]
     """
-    
     input_tensor = dataset.inputs[idx]  # (3, n, n)
     x = input_tensor.reshape(3, -1).T   # [nxn, 3]
 
@@ -44,17 +69,18 @@ def build_graph_from_sample(dataset, idx, edge_index):
 
     mask_fixed_temp = get_fixed_temp_mask(x)
 
-    return Data(x=x, y=y, edge_index=edge_index, mask_fixed_temp=mask_fixed_temp)
+    return Data(x=x, y=y, edge_index=edge_index, edge_attr=edge_attr, mask_fixed_temp=mask_fixed_temp)
 
-def build_graph_list(dataset, edge_index):
+def build_graph_list(dataset, edge_index, edge_attr):
     """
     Convierte todo un dataset normalizado en una lista de grafos PyG.
     """
     graphs = []
     for idx in range(len(dataset)):
-        graph = build_graph_from_sample(dataset, idx, edge_index)
+        graph = build_graph_from_sample(dataset, idx, edge_index, edge_attr)
         graphs.append(graph)
     return graphs
+
 
 def get_fixed_temp_mask(x, threshold=1e-5):
     """
@@ -122,9 +148,10 @@ def get_dataloaders_optuna(batch_size, dir_path):
     # 2. Crear edge_index
     grid_size = dataset.outputs.shape[-1]
     edge_index = generate_edge_index(grid_size)
+    edge_attr = generate_edge_attr(grid_size, edge_index)
 
     # 3. Convertir en lista de grafos
-    graphs = build_graph_list(dataset, edge_index)
+    graphs = build_graph_list(dataset, edge_index, edge_attr)
     random.shuffle(graphs)
 
     # 4. Dividir dataset

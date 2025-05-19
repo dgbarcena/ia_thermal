@@ -81,7 +81,8 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
     with torch.no_grad():
         for data in loader:
             data = data.to(device)
-            out = model(data.x, data.edge_index).view(-1)
+            # Todos los modelos aceptan edge_attr, aunque solo NNConv lo use
+            out = model(data.x, data.edge_index, data.edge_attr)
             true_vals = data.y.view(-1)
             pred_vals = out.clone()
 
@@ -210,146 +211,6 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
         val_total_loss
     )
 
-
-def evaluate_NNConv(model, loader, device, norm_info, error_threshold, use_physics=False, lambda_physics = 0.003,
-             use_boundary_loss=True, lambda_boundary = 0.01, use_heater_loss=True, lambda_heater = 0.01, 
-             percentage_threshold=None, plot_results=False):
-    model.eval()
-
-    all_mse, all_mae, all_r2, all_accuracy = [], [], [], []
-    all_true_vals, all_pred_vals = [], []
-    all_physics_loss, all_boundary_loss, all_heater_loss = [], [], []
-    
-    max_temp_output = norm_info["max_T_outputs"].item()
-
-    with torch.no_grad():
-        for data in loader:
-            data = data.to(device)
-            out = model(data.x, data.edge_index, data.edge_attr).view(-1)
-            true_vals = data.y.view(-1)
-            pred_vals = out.clone()
-
-            # Sustituir condiciones de contorno por valor real
-            mask_fixed = data.mask_fixed_temp.view(-1)
-            
-            # Solo mostrar la pérdida física si está activada
-            if use_physics:
-                loss_physics = compute_physics_loss(
-                    pred_T_norm=pred_vals,
-                    edge_index=data.edge_index,
-                    batch=data.batch,
-                    Q_heaters_norm=data.x[:, 2],
-                    T_env_norm=data.x[:, 1],
-                    norm_info=norm_info
-                )
-                all_physics_loss.append(loss_physics.item())
-            else:
-                loss_physics = torch.tensor(0.0)
-            
-            if use_boundary_loss:
-                loss_boundary = compute_boundary_loss(
-                    pred_T_norm=pred_vals,
-                    true_T_norm=true_vals,
-                    mask_fixed=mask_fixed
-                )
-                all_boundary_loss.append(loss_boundary.item())
-            else:
-                loss_boundary = torch.tensor(0.0)
-                
-            if use_heater_loss:
-                loss_heater = compute_heater_loss(
-                    pred_T_norm=pred_vals,
-                    true_T_norm=true_vals,
-                    Q_heaters_norm=data.x[:, 2]
-                )
-                all_heater_loss.append(loss_heater.item())
-            else:
-                loss_heater = torch.tensor(0.0)
-            
-            total_nodos = true_vals.shape[0]
-            nodos_por_grafico = data.num_nodes
-
-            if total_nodos % nodos_por_grafico != 0:
-                raise ValueError(f"El número total de nodos ({total_nodos}) no es divisible por nodos_por_grafico ({nodos_por_grafico}).")
-
-            true_split = torch.split(true_vals, nodos_por_grafico)
-            pred_split = torch.split(pred_vals, nodos_por_grafico)
-
-            for true_graph, pred_graph in zip(true_split, pred_split):
-                mask = ~data.mask_fixed_temp.view(-1)[:len(true_graph)]
-
-                true_graph_masked = true_graph[mask]
-                pred_graph_masked = pred_graph[mask]
-
-                eps = 1e-8
-                mse = F.mse_loss(pred_graph_masked, true_graph_masked).item()
-                mae = F.l1_loss(pred_graph_masked, true_graph_masked).item()
-
-                ss_res = torch.sum((true_graph_masked - pred_graph_masked) ** 2)
-                ss_tot = torch.sum((true_graph_masked - true_graph_masked.mean()) ** 2) + eps
-                r2 = 1 - ss_res / ss_tot
-
-                if percentage_threshold is not None:
-                    relative_error = torch.abs((true_graph_masked - pred_graph_masked) / (true_graph_masked + eps)) * 100
-                    within = relative_error <= percentage_threshold
-                else:
-                    error_threshold_norm = error_threshold / max_temp_output
-                    within = torch.abs(true_graph_masked - pred_graph_masked) <= error_threshold_norm
-
-                acc = torch.sum(within).item() / len(true_graph_masked) * 100
-
-                all_mse.append(mse)
-                all_mae.append(mae)
-                all_r2.append(r2.item())
-                all_accuracy.append(acc)
-
-                all_true_vals.append(true_graph.cpu())
-                all_pred_vals.append(pred_graph.cpu())
-
-        # Mostrar un mapa si se pide
-        if plot_results:
-            true_vals_batch = true_vals.view(-1, 1)
-            pred_vals_batch = pred_vals.view(-1, 1)
-            batch = data.batch
-
-            true_dense, mask = to_dense_batch(true_vals_batch, batch)
-            pred_dense, _ = to_dense_batch(pred_vals_batch, batch)
-
-            for i in range(true_dense.size(0)):
-                true_graph = true_dense[i][mask[i]].squeeze().cpu()
-                pred_graph = pred_dense[i][mask[i]].squeeze().cpu()
-
-                n = true_graph.shape[0]
-                lado = int(np.sqrt(n))
-                if lado * lado == n:
-                    plot_temperature_maps(true_graph * max_temp_output, pred_graph * max_temp_output)
-                break
-            else:
-                print("No se encontró ninguna muestra con número de nodos cuadrado perfecto para graficar.")
-
-    # Promedios
-    mse_mean = float(torch.tensor(all_mse).mean())
-    mae_mean = float(torch.tensor(all_mae).mean())
-    r2_mean = float(torch.tensor(all_r2).mean())
-    acc_mean = float(torch.tensor(all_accuracy).mean())
-    #rmse_mean = np.sqrt(mse_mean)
-
-    physics_loss_mean = float(torch.tensor(all_physics_loss).mean()) if use_physics else 0.0
-    boundary_loss_mean = float(torch.tensor(all_boundary_loss).mean()) if use_boundary_loss else 0.0
-    heater_loss_mean = float(torch.tensor(all_heater_loss).mean()) if use_heater_loss else 0.0
-    # Pérdida total combinada (para EarlyStopping)
-    val_total_loss = mse_mean + lambda_physics * physics_loss_mean + lambda_boundary * boundary_loss_mean + lambda_heater * heater_loss_mean
-
-    return (
-        mse_mean,
-        mae_mean,
-        r2_mean,
-        acc_mean,
-        physics_loss_mean,
-        boundary_loss_mean,
-        heater_loss_mean,
-        val_total_loss
-    )
 
 
 def predict(model, loader, device, norm_info):
