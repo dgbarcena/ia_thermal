@@ -114,7 +114,7 @@ class PCBDataset_mlp(Dataset):
     
     def create_input_from_values(self, Q_heaters, T_interfaces, T_env, time, sequence_length=1001):
         """
-        Crea un input normalizado de forma (9) a partir de:
+        Crea un input normalizado de forma (10) a partir de:
         - Q_heaters: np.array de shape (4)
         - T_interfaces: np.array de shape (4)
         - T_env: float o escalar
