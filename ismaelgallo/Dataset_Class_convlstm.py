@@ -15,12 +15,12 @@ def load_dataset_convlstm(base_path='.', folder='datasets', dataset_type=None, s
     - solver: 'transient' o 'steady' (por defecto 'transient')
     """
     if dataset_type is None:
-        filename = f'PCB_convlstm_{solver}_dataset.pth'
+        filename = f'PCB_convlstm_6ch_{solver}_dataset.pth'
     else:
         valid_types = ['train', 'test', 'val']
         if dataset_type not in valid_types:
             raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None para el dataset base.")
-        filename = f"PCB_convlstm_{solver}_dataset_{dataset_type}.pth"
+        filename = f"PCB_convlstm_6ch_{solver}_dataset_{dataset_type}.pth"
 
     full_path = os.path.join(base_path, folder, filename)
 
@@ -50,6 +50,14 @@ class PCBDataset_convlstm(Dataset):
         """
         
         self.return_bc = return_bc
+        
+        mask_interfaces = (T_interfaces != 0).float()
+        # print(f"Mask interfaces: {mask_interfaces}")  # (N, T, 13, 13)
+        mask_heaters = (Q_heaters != 0).float()
+        # print(f"Mask heaters: {mask_heaters}")  # (N, T, 13, 13)
+        
+        self.mask_interfaces = mask_interfaces
+        self.mask_heaters = mask_heaters
         
         self.T_interfaces_mean = T_interfaces_mean
         self.T_interfaces_std = T_interfaces_std
@@ -90,6 +98,9 @@ class PCBDataset_convlstm(Dataset):
         self.outputs = (T_outputs - T_outputs_mean) / T_outputs_std
         self.T_current = (T_current - T_outputs_mean) / T_outputs_std
         
+        self.T_interfaces = self.T_interfaces * mask_interfaces # aplicar máscara
+        self.Q_heaters = self.Q_heaters * mask_heaters # aplicar máscara
+        
         for n in range(N):
             seq_inputs = []
             for t in range(T):
@@ -98,13 +109,15 @@ class PCBDataset_convlstm(Dataset):
                 Q_map = self.Q_heaters[n, t]      # (13, 13)
                 T_env_map = self.T_env[n, t]      # (13, 13)
                 T_current_map = self.T_current[n, t]  # (13, 13)
+                mask_interfaces_map = self.mask_interfaces[n, t]  # (13, 13)
+                mask_heaters_map = self.mask_heaters[n, t]  # (13, 13)
         
                 # Stack canales
-                input_t = torch.stack([T_map, Q_map, T_env_map, T_current_map], dim=0)  # (4, 13, 13)
+                input_t = torch.stack([T_map, Q_map, T_env_map, T_current_map, mask_interfaces_map, mask_heaters_map], dim=0)  # (6, 13, 13)
                 seq_inputs.append(input_t)
-            seq_inputs = torch.stack(seq_inputs, dim=0)  # (T, 4, 13, 13)
+            seq_inputs = torch.stack(seq_inputs, dim=0)  # (T, 6, 13, 13)
             self.inputs.append(seq_inputs)
-        self.inputs = torch.stack(self.inputs, dim=0)  # (N, T, 4, 13, 13)
+        self.inputs = torch.stack(self.inputs, dim=0)  # (N, T, 6, 13, 13)
         # print(f"Input shape: {self.inputs.shape}")  # (N, T, 4, 13, 13)
         # self.outputs ya tiene shape (N, T, 13, 13)
 
@@ -116,9 +129,9 @@ class PCBDataset_convlstm(Dataset):
     
     def denormalize_input(self, x):
         """
-        Desnormaliza el input completo (4 canales) usando las funciones individuales.
+        Desnormaliza el input completo (6 canales) usando las funciones individuales.
         Entrada: x de forma (..., 4, 13, 13)
-        Salida: tensor desnormalizado con los 4 canales
+        Salida: tensor desnormalizado con los 6 canales
         """
         device = x.device
         x_denorm = torch.empty_like(x)
@@ -127,6 +140,8 @@ class PCBDataset_convlstm(Dataset):
         x_denorm[..., 1, :, :] = self.denormalize_Q_heaters(x[..., 1, :, :].to(device))
         x_denorm[..., 2, :, :] = self.denormalize_T_env(x[..., 2, :, :].to(device))
         x_denorm[..., 3, :, :] = self.denormalize_output(x[..., 3, :, :].to(device))
+        x_denorm[..., 4, :, :] = x[..., 4, :, :]  # Mask interfaces (no desnormalizar)
+        x_denorm[..., 5, :, :] = x[..., 5, :, :]  # Mask heaters (no desnormalizar)
 
         return x_denorm
     
@@ -147,6 +162,10 @@ class PCBDataset_convlstm(Dataset):
         T_interfaces = torch.tensor(T_interfaces, dtype=torch.float32)
         T_env = torch.tensor(T_env, dtype=torch.float32)
         T_seq = torch.tensor(T_seq, dtype=torch.float32)
+        
+        # # Implementar la máscara de interfaces
+        # mask_interfaces = (T_interfaces != 0).float()
+        # mask_heaters = (Q_heaters != 0).float()
 
         # Normalizar
         Q_norm = (Q_heaters - self.Q_heaters_mean) / self.Q_heaters_std
@@ -159,22 +178,33 @@ class PCBDataset_convlstm(Dataset):
         T_map = torch.zeros((13, 13))
         T_env_map = torch.full((13, 13), T_env_norm)
         # T_current_map = torch.full((13, 13), T_current_norm)
+        # # Mask interfaces
+        # mask_interfaces_map = torch.zeros((13, 13))
+        # mask_heaters_map = torch.zeros((13, 13))
+        # mask_interfaces_map[mask_interfaces == 1] = 1
+        # mask_heaters_map[mask_heaters == 1] = 1
 
         # Posicionar los valores
         T_map[0, 0] = T_int_norm[0]
         T_map[0, -1] = T_int_norm[1]
         T_map[-1, -1] = T_int_norm[2]
         T_map[-1, 0] = T_int_norm[3]
+                
+        mask_interfaces_map = (T_map != 0).float() # máscara de interfaces
 
         Q_map[6, 3] = Q_norm[0]
         Q_map[3, 6] = Q_norm[1]
         Q_map[9, 3] = Q_norm[2]
         Q_map[9, 9] = Q_norm[3]
 
+        mask_heaters_map = (Q_map != 0).float() # máscara de heaters
+
         # Stack y replicar en el tiempo
-        input_bc = torch.stack([T_map, Q_map, T_env_map], dim=0)  # (, 13, 13)
-        input_tensor = torch.zeros((1, sequence_length, 4, nodes_side, nodes_side), dtype=torch.float32)
+        input_bc = torch.stack([T_map, Q_map, T_env_map, mask_interfaces_map, mask_heaters_map], dim=0)  # (, 13, 13)
+        input_tensor = torch.zeros((1, sequence_length, 6, nodes_side, nodes_side), dtype=torch.float32)
         input_tensor[:, :, 0:3, :, :] = input_bc[0:3, :, :] 
+        input_tensor[:, :, 4, :, :] = input_bc[3, :, :]  # Mask interfaces
+        input_tensor[:, :, 5, :, :] = input_bc[4, :, :]  # Mask heaters
         input_tensor[:, :, 3, :, :] = T_seq_norm  # (T, 13, 13)
         print(f"Input tensor shape: {input_tensor.shape}")  # (1, T, 4, 13, 13)
         # input_tensor = input_tensor.unsqueeze(0).unsqueeze(1)         # (1, 1, 3, 13, 13)
@@ -183,8 +213,6 @@ class PCBDataset_convlstm(Dataset):
 
         return input_tensor.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
 
-
-    
     def denormalize_T_env(self,x):
         tensor_device = x.device
         mean = self.T_env_mean.to(tensor_device)
@@ -332,12 +360,12 @@ def load_trimmed_dataset_convlstm(base_path='.', folder='datasets', dataset_type
         TrimmedDataset
     """
     if dataset_type is None:
-        filename = f'PCB_convlstm_{solver}_dataset.pth'
+        filename = f'PCB_convlstm_6ch_{solver}_dataset.pth'
     else:
         valid_types = ['train', 'test', 'val']
         if dataset_type not in valid_types:
             raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None.")
-        filename = f"PCB_convlstm_{solver}_dataset_{dataset_type}.pth"
+        filename = f"PCB_convlstm_6ch_{solver}_dataset_{dataset_type}.pth"
 
     full_path = os.path.join(base_path, folder, filename)
 
@@ -463,3 +491,28 @@ def prepare_data_with_bc(dataset, device):
     bc_all = torch.cat([q, t_int, t_env], dim=1)  # (B, 9)
 
     return TensorDataset(x.to(device), y.to(device), bc_all.to(device))
+
+
+class FlattenedTemporalDataset(Dataset):
+    def __init__(self, base_dataset):
+        # Accede al dataset base si es un wrapper
+        if hasattr(base_dataset, 'base_dataset'):
+            self.base_dataset = base_dataset.base_dataset
+        else:
+            self.base_dataset = base_dataset
+
+        self.inputs = self.base_dataset.inputs  # (N, T, C, H, W)
+        self.outputs = self.base_dataset.outputs  # (N, T, H, W)
+        N, T = self.inputs.shape[:2]
+        self.N = N
+        self.T = T
+
+    def __len__(self):
+        return self.N * self.T
+
+    def __getitem__(self, idx):
+        n = idx // self.T
+        t = idx % self.T
+        x = self.inputs[n, t]    # (C, H, W)
+        y = self.outputs[n, t]   # (H, W)
+        return x, y

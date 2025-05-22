@@ -21,7 +21,7 @@ from Dataset_Class_convlstm import PCBDataset_convlstm
 
 solver = 'transient' # steady or transient
 
-n_train = 2000
+n_train = 1500
 n_validation = 600
 n_test = 100
 n_data = n_train+n_test+n_validation  
@@ -32,7 +32,7 @@ idx_val = slice(n_test + n_train, n_test + n_train + n_validation)
 idx_test = slice(0, n_test)
 
 nodes_side = 13
-time_sim = 1000
+time_sim = 10
 dt = 1
 T_init = 298.0
 
@@ -45,13 +45,27 @@ Q_random = np.random.uniform(0.5, 1.0, (n_data, 4))
 T_interfaces_random = np.random.uniform(280, 310, (n_data, 4))
 T_env_random = np.random.uniform(280, 310, n_data)
 
+# Q_random_mean = Q_random.mean()
+# Q_random_std = Q_random.std()
+# Q_random_max = Q_random.max()
+# Q_random_min = Q_random.min()
+# T_interfaces_random_mean = T_interfaces_random.mean()
+# T_interfaces_random_std = T_interfaces_random.std()
+# T_interfaces_random_max = T_interfaces_random.max()
+# T_interfaces_random_min = T_interfaces_random.min()
+# T_env_random_mean = T_env_random.mean()
+# T_env_random_std = T_env_random.std()
+# T_env_random_max = T_env_random.max()
+# T_env_random_min = T_env_random.min()
+
+
 time_start = time.time()
     
 input_seq = []
 output_seq = []
 
 for i in range(n_data):
-    if i % 200 == 0:
+    if i % 100 == 0:
         print("Generating element number: ", i, " | time: ", time.time()-time_start)
     # ...existing code...
     T, _, _, _ = PCB_case_2(
@@ -136,9 +150,10 @@ output_seq = torch.tensor(output_seq, dtype=torch.float32)
 # T_interfaces = torch.tensor(T_interfaces,dtype=torch.float32)
 
 # calculate averages and standard deviations
-T_interfaces_mean = T_interfaces_random.mean() # careful because calculated with lots of zeros
+T_interfaces_mean = T_interfaces_random.mean() 
+# print("T_interfaces_mean:", T_interfaces_mean)
 T_interfaces_std = T_interfaces_random.std()
-Q_heaters_mean = Q_random.mean() # careful because calculated with lots of zeros
+Q_heaters_mean = Q_random.mean()
 Q_heaters_std = Q_random.std()
 T_env_mean = T_env_random.mean()
 T_env_std = T_env_random.std()
@@ -214,13 +229,13 @@ path = os.path.join(base_path,'datasets')
 if not os.path.exists(path):
     os.makedirs(path)
 
-torch.save(dataset_train, os.path.join(path, 'PCB_convlstm_transient_dataset_train.pth'))
-torch.save(dataset_test, os.path.join(path, 'PCB_convlstm_transient_dataset_test.pth'))
-torch.save(dataset_val, os.path.join(path, 'PCB_convlstm_transient_dataset_val.pth'))
-torch.save(dataset, os.path.join(path, 'PCB_convlstm_transient_dataset.pth'))
+torch.save(dataset_train, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_train.pth'))
+torch.save(dataset_test, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_test.pth'))
+torch.save(dataset_val, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_val.pth'))
+torch.save(dataset, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset.pth'))
 
 
-#%%
+# # %%
 # print("input_seq shape:", input_seq.shape)     # Esperado: (n_data, seq_len, 9)
 # print("output_seq shape:", output_seq.shape)   # Esperado: (n_data, seq_len, 13, 13)
 
