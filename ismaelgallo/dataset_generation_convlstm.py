@@ -22,7 +22,7 @@ from Dataset_Class_convlstm import PCBDataset_convlstm
 solver = 'transient' # steady or transient
 
 n_train = 1500
-n_validation = 600
+n_validation = 300
 n_test = 100
 n_data = n_train+n_test+n_validation  
 
@@ -32,7 +32,7 @@ idx_val = slice(n_test + n_train, n_test + n_train + n_validation)
 idx_test = slice(0, n_test)
 
 nodes_side = 13
-time_sim = 10
+time_sim = 200
 dt = 1
 T_init = 298.0
 
@@ -115,10 +115,6 @@ output_seq = np.array(output_seq, dtype=np.float32) # (n_data, seq_len, 13, 13)
 # Luego sigue igual:
 input_seq = torch.tensor(input_seq, dtype=torch.float32)
 output_seq = torch.tensor(output_seq, dtype=torch.float32)
-    
-time_end = time.time()
-time_generation_data = time_end-time_start
-print("Time to generate the data: ",time_generation_data)
 
 # transform the lists into numpy arrays
 input_seq = np.array(input_seq)   # (n_data, seq_len, 9)
@@ -250,3 +246,7 @@ torch.save(dataset, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset.pth')
 #     print(x_batch.shape)  # (batch, seq_len, 4, 13, 13)
 #     print(y_batch.shape)  # (batch, seq_len, 13, 13)
 #     break
+    
+time_end = time.time()
+time_total_data = time_end-time_start
+print("Time to generate and save the data: ",time_total_data)

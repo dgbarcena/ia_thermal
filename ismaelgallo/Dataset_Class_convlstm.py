@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import Dataset, TensorDataset
 import os
+import numpy as np
 
 #%%
 
@@ -145,13 +146,15 @@ class PCBDataset_convlstm(Dataset):
 
         return x_denorm
     
-    def create_input_from_values(self, Q_heaters, T_interfaces, T_env, T_seq, sequence_length=1001):
+    def create_input_from_values(self, Q_heaters, T_interfaces, T_env, T_seq, sequence_length=1001, autorregress=False):
         """
         Crea un input normalizado de forma (1, T, 4, 13, 13) a partir de:
         - Q_heaters: np.array de shape (4,)
         - T_interfaces: np.array de shape (4,)
         - T_env: float o escalar
         - T_seq: np.array de shape (T, 13, 13)
+        - autorregress: bool, si True, se calcula solo el primer paso de la secuencia
+        - sequence_length: int, longitud de la secuencia (por defecto 1001)
 
         Devuelve: tensor (1, T, 4, 13, 13)
         """
@@ -163,10 +166,6 @@ class PCBDataset_convlstm(Dataset):
         T_env = torch.tensor(T_env, dtype=torch.float32)
         T_seq = torch.tensor(T_seq, dtype=torch.float32)
         
-        # # Implementar la máscara de interfaces
-        # mask_interfaces = (T_interfaces != 0).float()
-        # mask_heaters = (Q_heaters != 0).float()
-
         # Normalizar
         Q_norm = (Q_heaters - self.Q_heaters_mean) / self.Q_heaters_std
         T_int_norm = (T_interfaces - self.T_interfaces_mean) / self.T_interfaces_std
@@ -177,39 +176,39 @@ class PCBDataset_convlstm(Dataset):
         Q_map = torch.zeros((13, 13))
         T_map = torch.zeros((13, 13))
         T_env_map = torch.full((13, 13), T_env_norm)
-        # T_current_map = torch.full((13, 13), T_current_norm)
-        # # Mask interfaces
-        # mask_interfaces_map = torch.zeros((13, 13))
-        # mask_heaters_map = torch.zeros((13, 13))
-        # mask_interfaces_map[mask_interfaces == 1] = 1
-        # mask_heaters_map[mask_heaters == 1] = 1
 
         # Posicionar los valores
         T_map[0, 0] = T_int_norm[0]
         T_map[0, -1] = T_int_norm[1]
         T_map[-1, -1] = T_int_norm[2]
         T_map[-1, 0] = T_int_norm[3]
-                
         mask_interfaces_map = (T_map != 0).float() # máscara de interfaces
 
         Q_map[6, 3] = Q_norm[0]
         Q_map[3, 6] = Q_norm[1]
         Q_map[9, 3] = Q_norm[2]
         Q_map[9, 9] = Q_norm[3]
-
         mask_heaters_map = (Q_map != 0).float() # máscara de heaters
 
         # Stack y replicar en el tiempo
-        input_bc = torch.stack([T_map, Q_map, T_env_map, mask_interfaces_map, mask_heaters_map], dim=0)  # (, 13, 13)
-        input_tensor = torch.zeros((1, sequence_length, 6, nodes_side, nodes_side), dtype=torch.float32)
-        input_tensor[:, :, 0:3, :, :] = input_bc[0:3, :, :] 
-        input_tensor[:, :, 4, :, :] = input_bc[3, :, :]  # Mask interfaces
-        input_tensor[:, :, 5, :, :] = input_bc[4, :, :]  # Mask heaters
-        input_tensor[:, :, 3, :, :] = T_seq_norm  # (T, 13, 13)
-        print(f"Input tensor shape: {input_tensor.shape}")  # (1, T, 4, 13, 13)
-        # input_tensor = input_tensor.unsqueeze(0).unsqueeze(1)         # (1, 1, 3, 13, 13)
-        # input_tensor = input_tensor.repeat(1, sequence_length, 1, 1, 1)  # (1, T, 3, 13, 13)
-        # input_tensor
+        if autorregress:
+            print('Calculando input tensor para predicción, solo el primer paso de la secuencia')
+            input_bc = torch.stack([T_map, Q_map, T_env_map, mask_interfaces_map, mask_heaters_map], dim=0)
+            input_tensor = torch.zeros((1, 1, 6, nodes_side, nodes_side), dtype=torch.float32) # se añade una dimensión de tiempo
+            input_tensor[:, :, 0:3, :, :] = input_bc[0:3, :, :]
+            input_tensor[:, :, 4, :, :] = input_bc[3, :, :]
+            input_tensor[:, :, 5, :, :] = input_bc[4, :, :]
+            input_tensor[:, :, 3, :, :] = T_seq_norm[0:1, :, :]
+            # print(f"Input tensor shape: {input_tensor.shape}")
+        else:
+            print('Calculando input tensor para entrenamiento, toda la secuencia con datos del solver')
+            input_bc = torch.stack([T_map, Q_map, T_env_map, mask_interfaces_map, mask_heaters_map], dim=0)  # (, 13, 13)
+            input_tensor = torch.zeros((1, sequence_length, 6, nodes_side, nodes_side), dtype=torch.float32)
+            input_tensor[:, :, 0:3, :, :] = input_bc[0:3, :, :] 
+            input_tensor[:, :, 4, :, :] = input_bc[3, :, :]  # Mask interfaces
+            input_tensor[:, :, 5, :, :] = input_bc[4, :, :]  # Mask heaters
+            input_tensor[:, :, 3, :, :] = T_seq_norm  # (T, 13, 13)
+            # print(f"Input tensor shape: {input_tensor.shape}")  # (1, T, 4, 13, 13)
 
         return input_tensor.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
 
@@ -303,6 +302,8 @@ class TrimmedDataset_convlstm(Dataset):
         self.time_steps_output = time_steps_output
         assert solver in ['steady', 'transient'], "solver must be 'steady' or 'transient'"
         self.solver = solver
+        self.inputs = base_dataset.inputs[:max_samples, :time_steps_output]
+        self.outputs = base_dataset.outputs[:max_samples, :time_steps_output]
 
     def __len__(self):
         return min(self.max_samples, len(self.base_dataset))
@@ -492,27 +493,112 @@ def prepare_data_with_bc(dataset, device):
 
     return TensorDataset(x.to(device), y.to(device), bc_all.to(device))
 
+  
 
-class FlattenedTemporalDataset(Dataset):
-    def __init__(self, base_dataset):
-        # Accede al dataset base si es un wrapper
-        if hasattr(base_dataset, 'base_dataset'):
-            self.base_dataset = base_dataset.base_dataset
-        else:
-            self.base_dataset = base_dataset
+class TemporalWindowDataset(Dataset):
+    def __init__(self, base_dataset, window_size=5, stride=1):
+        """
+        Args:
+            base_dataset (Dataset): Dataset base con datos temporales.
+            window_size (int): Tamaño de la ventana temporal (número de pasos de tiempo).
+            stride (int): Salto entre ventanas consecutivas.
+        """
+        self.base_dataset = base_dataset
+        self.window_size = window_size
+        self.stride = stride
 
-        self.inputs = self.base_dataset.inputs  # (N, T, C, H, W)
-        self.outputs = self.base_dataset.outputs  # (N, T, H, W)
-        N, T = self.inputs.shape[:2]
-        self.N = N
-        self.T = T
+        # Obtener la forma del dataset base
+        self.N, self.T, self.C, self.H, self.W = self.base_dataset.inputs.shape
+
+        # Generar índices para las ventanas deslizantes
+        self.samples = [
+            (n, t)
+            for n in range(self.N)
+            for t in range(self.window_size, self.T, self.stride)
+        ]
 
     def __len__(self):
-        return self.N * self.T
+        """
+        Devuelve el número total de ventanas generadas.
+        """
+        return len(self.samples)
 
     def __getitem__(self, idx):
-        n = idx // self.T
-        t = idx % self.T
-        x = self.inputs[n, t]    # (C, H, W)
-        y = self.outputs[n, t]   # (H, W)
-        return x, y
+        """
+        Devuelve una ventana temporal y su correspondiente target.
+
+        Args:
+            idx (int): Índice de la ventana.
+
+        Returns:
+            X (torch.Tensor): Ventana de entrada con forma (window_size, C, H, W).
+            y (torch.Tensor): Target correspondiente con forma (1, H, W).
+        """
+        n, t = self.samples[idx]
+        X = self.base_dataset.inputs[n, t - self.window_size:t]  # Ventana de entrada
+        y = self.base_dataset.outputs[n, t].unsqueeze(0)         # Target
+        return X, y
+    
+    
+def rollout_convlstm_manytoone(
+    model: torch.nn.Module,
+    dataset: PCBDataset_convlstm,
+    Q_heaters: np.ndarray,
+    T_interfaces: np.ndarray,
+    T_env: np.ndarray,
+    T_seq_init: np.ndarray,  # Recibe los primeros K pasos como un array [K, 13, 13]
+    n_steps: int = 101,
+    window_size: int = 5,
+    device: torch.device = None,
+    denormalize: bool = True,
+):
+    """
+    Realiza un rollout autoregresivo Many-to-One usando ventanas deslizantes.
+    Devuelve un array (n_steps, 13, 13) con los mapas de temperatura desnormalizados.
+
+    Args:
+        model: Modelo ConvLSTM.
+        dataset: Dataset para normalización y creación de inputs.
+        Q_heaters: Array de valores de los heaters [4,].
+        T_interfaces: Array de valores de las interfaces [4,].
+        T_env: Valor escalar de la temperatura ambiente.
+        T_seq_init: Array inicial de los primeros K pasos [K, 13, 13].
+        n_steps: Número de pasos temporales a predecir.
+        window_size: Tamaño de la ventana deslizante (K).
+        device: Dispositivo (CPU o GPU).
+        denormalize: Si True, desnormaliza los resultados.
+    """
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device).eval()
+
+    # Convertir T_seq_init a tensor y mover al dispositivo
+    T_seq = [torch.tensor(T_seq_init[t], dtype=torch.float32, device=device) for t in range(window_size)]
+
+    # Rollout autoregresivo
+    with torch.no_grad():
+        for t in range(n_steps):
+            # Preparar input de la ventana actual (shape: [1, K, 6, 13, 13])
+            T_seq_window = torch.stack(T_seq[-window_size:], dim=0)  # (K, 13, 13)
+            input_tensor = dataset.create_input_from_values(
+                Q_heaters, T_interfaces, T_env, T_seq_window, sequence_length=window_size, autorregress=True
+            )  # (1, K, 6, 13, 13)
+            input_tensor = input_tensor.to(device)
+
+            # Modelo espera (batch, K, 6, 13, 13)
+            y_pred = model(input_tensor)  # (1, 1, 13, 13) o (1, 13, 13)
+            if isinstance(y_pred, (tuple, list)):
+                y_pred = y_pred[0]
+            if y_pred.ndim == 4:
+                y_pred = y_pred.squeeze(1)  # (1, 13, 13)
+            y_pred = y_pred.squeeze(0)      # (13, 13)
+
+            T_seq.append(y_pred.detach())  # Keep on the same device
+
+    # Juntar resultados
+    T_seq_out = torch.stack(T_seq[window_size:], dim=0)  # (n_steps, 13, 13)
+
+    # Desnormalizar si es necesario
+    if denormalize:
+        T_seq_out = dataset.denormalize_output(T_seq_out)
+    return T_seq_out.cpu().numpy()
