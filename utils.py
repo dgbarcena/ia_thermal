@@ -11,7 +11,7 @@ import numpy as np
 import torch
 from Convolutional_NN.Dataset_Class import *
 from typing import Sequence, Union, Optional
-from ismaelgallo.Dataset_Class_convlstm import PCBDataset_convlstm
+from ismaelgallo.Dataset_Class_mlp import PCBDataset_mlp
 
 
 def porcentaje_error_bajo_umbral(T_true: np.ndarray, T_pred: np.ndarray, umbral: float = 5.0) -> float:
@@ -179,47 +179,57 @@ def evaluate(model, dataloader, criterion, device):
 
     return total_loss / len(dataloader)
 
-def rollout_convlstm_6ch_onetoone(
+
+def predict_temperature_mlp(
     model: torch.nn.Module,
-    dataset: PCBDataset,
-    Q_heaters: np.ndarray, 
-    T_interfaces: np.ndarray,
-    T_env: np.ndarray,
-    T_init: np.ndarray = np.full((13, 13), 298.0),
-    # input_tensor: torch.Tensor,
+    dataset: PCBDataset_mlp,
+    Q_heaters: Sequence[float],
+    T_interfaces: Sequence[float],
+    T_env: float,
+    time_raw_seq: Optional[Union[np.ndarray, torch.Tensor]] = None,
     n_steps: int = 1001,
-    device: Optional[torch.device] = None,
-    autorregresive: bool = True,
-    denormalize: bool = True,
+    device: Optional[torch.device] = None
 ) -> np.ndarray:
     """
-    Realiza una inferencia completa de la evolución térmica de la PCB.
-    Devuelve un array (n_steps, 13, 13) con los mapas de temperatura desnormalizados.
+    Inferencia completa de la evolución térmica de la PCB.
+
+    Si `time_raw_seq` es None, se crea automáticamente el vector
+    de tiempo normalizado de longitud 1001 por defecto.
+
+    Devuelve un array (n_steps, 169) con los mapas de temperatura
+    desnormalizados.
     """
-    
-    T_init_tensor = torch.tensor(T_init, dtype=torch.float32).unsqueeze(0).unsqueeze(0)  # [13, 13]
-    
-    # Device y modelo  
+    # 0) Device y modelo  
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device).eval()
 
-    # Crear el input de arranque de la red
-    input_tensor0 = dataset.create_input_from_values(Q_heaters, T_interfaces, T_env, T_init_tensor, sequence_length=n_steps, autorregress=True)
-    
-    # se inicializa todo igual y luego se updatea
-    input_seq = input_tensor0.repeat(1, n_steps, 1, 1, 1)  # [1, n_steps, 6, 13, 13]
-    output_norm = torch.zeros((1, n_steps, 1, 13, 13), dtype=torch.float32).to(device)  # [1, n_steps, 1, 13, 13]
+    # 1) Generar o convertir la secuencia de tiempo cruda
+    if time_raw_seq is None:
+        time_raw = torch.arange(0, n_steps, dtype=torch.float32)  # (n_steps,)
+    else:
+        if isinstance(time_raw_seq, np.ndarray):
+            time_raw = torch.from_numpy(time_raw_seq.astype(np.float32))
+        else:
+            time_raw = time_raw_seq.clone().float()
+    time_raw = time_raw.to(device)
 
+    # 2) Crear todos los inputs normalizados
+    inputs = []
+    for t in time_raw.cpu().numpy():
+        inp = dataset.create_input_from_values(
+            Q_heaters=Q_heaters,
+            T_interfaces=T_interfaces,
+            T_env=T_env,
+            time=t
+        )
+        inputs.append(inp.unsqueeze(0))
+    X = torch.cat(inputs, dim=0).to(device)  # (n_steps, 10)
+
+    # 3) Inferir en batch
     with torch.no_grad():
-        for t in range(n_steps):
-            output_norm[:, t, :, :, :] = model(input_seq[:, t, :, :, :])
-            if t + 1 < n_steps:
-                input_seq[:, t + 1, 3, :, :] = output_norm[:, t, :, :, :]
+        preds_norm = model(X)  # (n_steps, 169)
 
-    # Desnormalizar la salida
-    output_norm = output_norm.squeeze(2).squeeze(0)  # [n_steps, 13, 13]
-    temps_denorm = dataset.denormalize_output(output_norm)  # (n_steps,13, 13)
-    temps_denorm = temps_denorm.cpu().numpy()  # Convertir a numpy
-    
+    # 4) Desnormalizar la salida
+    temps_denorm = dataset.denormalize_output(preds_norm)  # (n_steps,169)
     return temps_denorm

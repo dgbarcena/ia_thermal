@@ -20,13 +20,13 @@ from Dataset_Class import PCBDataset
 
 solver = 'steady' # steady or transient
 
-n_train = 2048
+n_train = 100000
 n_validation = 20000
 n_test = 10000
 n_data = n_train+n_test+n_validation  
 
 nodes_side = 13
-time_sim = 100
+time_sim = 1000
 dt = 1
 T_init = 298.0
 
