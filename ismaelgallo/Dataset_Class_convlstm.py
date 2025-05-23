@@ -145,13 +145,15 @@ class PCBDataset_convlstm(Dataset):
 
         return x_denorm
     
-    def create_input_from_values(self, Q_heaters, T_interfaces, T_env, T_seq, sequence_length=1001):
+    def create_input_from_values(self, Q_heaters, T_interfaces, T_env, T_seq, sequence_length=1001, autorregress=False):
         """
         Crea un input normalizado de forma (1, T, 4, 13, 13) a partir de:
         - Q_heaters: np.array de shape (4,)
         - T_interfaces: np.array de shape (4,)
         - T_env: float o escalar
         - T_seq: np.array de shape (T, 13, 13)
+        - autorregress: bool, si True, se calcula solo el primer paso de la secuencia
+        - sequence_length: int, longitud de la secuencia (por defecto 1001)
 
         Devuelve: tensor (1, T, 4, 13, 13)
         """
@@ -163,10 +165,6 @@ class PCBDataset_convlstm(Dataset):
         T_env = torch.tensor(T_env, dtype=torch.float32)
         T_seq = torch.tensor(T_seq, dtype=torch.float32)
         
-        # # Implementar la máscara de interfaces
-        # mask_interfaces = (T_interfaces != 0).float()
-        # mask_heaters = (Q_heaters != 0).float()
-
         # Normalizar
         Q_norm = (Q_heaters - self.Q_heaters_mean) / self.Q_heaters_std
         T_int_norm = (T_interfaces - self.T_interfaces_mean) / self.T_interfaces_std
@@ -177,39 +175,39 @@ class PCBDataset_convlstm(Dataset):
         Q_map = torch.zeros((13, 13))
         T_map = torch.zeros((13, 13))
         T_env_map = torch.full((13, 13), T_env_norm)
-        # T_current_map = torch.full((13, 13), T_current_norm)
-        # # Mask interfaces
-        # mask_interfaces_map = torch.zeros((13, 13))
-        # mask_heaters_map = torch.zeros((13, 13))
-        # mask_interfaces_map[mask_interfaces == 1] = 1
-        # mask_heaters_map[mask_heaters == 1] = 1
 
         # Posicionar los valores
         T_map[0, 0] = T_int_norm[0]
         T_map[0, -1] = T_int_norm[1]
         T_map[-1, -1] = T_int_norm[2]
         T_map[-1, 0] = T_int_norm[3]
-                
         mask_interfaces_map = (T_map != 0).float() # máscara de interfaces
 
         Q_map[6, 3] = Q_norm[0]
         Q_map[3, 6] = Q_norm[1]
         Q_map[9, 3] = Q_norm[2]
         Q_map[9, 9] = Q_norm[3]
-
         mask_heaters_map = (Q_map != 0).float() # máscara de heaters
 
         # Stack y replicar en el tiempo
-        input_bc = torch.stack([T_map, Q_map, T_env_map, mask_interfaces_map, mask_heaters_map], dim=0)  # (, 13, 13)
-        input_tensor = torch.zeros((1, sequence_length, 6, nodes_side, nodes_side), dtype=torch.float32)
-        input_tensor[:, :, 0:3, :, :] = input_bc[0:3, :, :] 
-        input_tensor[:, :, 4, :, :] = input_bc[3, :, :]  # Mask interfaces
-        input_tensor[:, :, 5, :, :] = input_bc[4, :, :]  # Mask heaters
-        input_tensor[:, :, 3, :, :] = T_seq_norm  # (T, 13, 13)
-        print(f"Input tensor shape: {input_tensor.shape}")  # (1, T, 4, 13, 13)
-        # input_tensor = input_tensor.unsqueeze(0).unsqueeze(1)         # (1, 1, 3, 13, 13)
-        # input_tensor = input_tensor.repeat(1, sequence_length, 1, 1, 1)  # (1, T, 3, 13, 13)
-        # input_tensor
+        if autorregress:
+            print('Calculando input tensor para predicción, solo el primer paso de la secuencia')
+            input_bc = torch.stack([T_map, Q_map, T_env_map, mask_interfaces_map, mask_heaters_map], dim=0)
+            input_tensor = torch.zeros((1, 1, 6, nodes_side, nodes_side), dtype=torch.float32) # se añade una dimensión de tiempo
+            input_tensor[:, :, 0:3, :, :] = input_bc[0:3, :, :]
+            input_tensor[:, :, 4, :, :] = input_bc[3, :, :]
+            input_tensor[:, :, 5, :, :] = input_bc[4, :, :]
+            input_tensor[:, :, 3, :, :] = T_seq_norm[0:1, :, :]
+            print(f"Input tensor shape: {input_tensor.shape}")
+        else:
+            print('Calculando input tensor para entrenamiento, toda la secuencia con datos del solver')
+            input_bc = torch.stack([T_map, Q_map, T_env_map, mask_interfaces_map, mask_heaters_map], dim=0)  # (, 13, 13)
+            input_tensor = torch.zeros((1, sequence_length, 6, nodes_side, nodes_side), dtype=torch.float32)
+            input_tensor[:, :, 0:3, :, :] = input_bc[0:3, :, :] 
+            input_tensor[:, :, 4, :, :] = input_bc[3, :, :]  # Mask interfaces
+            input_tensor[:, :, 5, :, :] = input_bc[4, :, :]  # Mask heaters
+            input_tensor[:, :, 3, :, :] = T_seq_norm  # (T, 13, 13)
+            print(f"Input tensor shape: {input_tensor.shape}")  # (1, T, 4, 13, 13)
 
         return input_tensor.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
 
@@ -493,26 +491,66 @@ def prepare_data_with_bc(dataset, device):
     return TensorDataset(x.to(device), y.to(device), bc_all.to(device))
 
 
-class FlattenedTemporalDataset(Dataset):
-    def __init__(self, base_dataset):
-        # Accede al dataset base si es un wrapper
-        if hasattr(base_dataset, 'base_dataset'):
-            self.base_dataset = base_dataset.base_dataset
-        else:
-            self.base_dataset = base_dataset
+# class FlattenedTemporalDataset(Dataset):
+#     def __init__(self, base_dataset):
+#         # Accede al dataset base si es un wrapper
+#         if hasattr(base_dataset, 'base_dataset'):
+#             self.base_dataset = base_dataset.base_dataset
+#         else:
+#             self.base_dataset = base_dataset
 
-        self.inputs = self.base_dataset.inputs  # (N, T, C, H, W)
-        self.outputs = self.base_dataset.outputs  # (N, T, H, W)
-        N, T = self.inputs.shape[:2]
-        self.N = N
-        self.T = T
+#         self.inputs = self.base_dataset.inputs  # (N, T, C, H, W)
+#         self.outputs = self.base_dataset.outputs  # (N, T, H, W)
+#         N, T = self.inputs.shape[:2]
+#         self.N = N
+#         self.T = T
+
+#     def __len__(self):
+#         return self.N * self.T
+
+#     def __getitem__(self, idx):
+#         n = idx // self.T
+#         t = idx % self.T
+#         x = self.inputs[n, t]    # (C, H, W)
+#         y = self.outputs[n, t]   # (H, W)
+#         return x, y
+    
+    
+def get_base_with_inputs_outputs(ds):
+    # Busca recursivamente el dataset que tiene los atributos .inputs y .outputs
+    while not (hasattr(ds, "inputs") and hasattr(ds, "outputs")):
+        if hasattr(ds, "base_dataset"):
+            ds = ds.base_dataset
+        elif hasattr(ds, "base"):
+            ds = ds.base
+        else:
+            raise AttributeError("No se encontró un dataset con .inputs y .outputs")
+    return ds
+
+class PCBDatasetSliding(Dataset):
+    """
+    Envuelve un PCBDataset_convlstm y lo presenta como
+    ventanas deslizantes Many→One.
+    """
+    def __init__(self, base_ds, window_size=5, stride=1):
+        # Buscar el dataset real con .inputs y .outputs
+        self.base = get_base_with_inputs_outputs(base_ds)
+        self.K = window_size
+        self.stride = stride
+
+        N, T, _, _, _ = self.base.inputs.shape  # (N,T,C,H,W)
+        self.samples = [
+            (n, t)
+            for n in range(N)
+            for t in range(self.K, T, stride)
+        ]
 
     def __len__(self):
-        return self.N * self.T
+        return len(self.samples)
 
     def __getitem__(self, idx):
-        n = idx // self.T
-        t = idx % self.T
-        x = self.inputs[n, t]    # (C, H, W)
-        y = self.outputs[n, t]   # (H, W)
-        return x, y
+        n, t = self.samples[idx]
+        K = self.K
+        X = self.base.inputs[n, t-K:t]           # (K, 6, 13, 13)
+        y = self.base.outputs[n, t].unsqueeze(0) # (1, 13, 13)
+        return X, y
