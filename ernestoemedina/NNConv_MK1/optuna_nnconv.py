@@ -2,7 +2,7 @@ import optuna
 import torch
 import os
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from ernestoemedina.NNConv_MK1.nnconv_model import GCN
+from nnconv_model import NNConvNet
 from train_eval import train, evaluate
 from dataset_utils import get_dataloaders_optuna
 
@@ -27,8 +27,8 @@ def get_dataloaders(batch_size, dir_path):
 
 def objective(trial):
     # --- Hiperparámetros a optimizar ---
-    num_layers = trial.suggest_int("num_layers", 10, 30)
-    hidden_dim = trial.suggest_categorical("hidden_dim", [32, 64, 128, 256, 512])
+    num_layers = trial.suggest_int("num_layers", 3, 10)
+    hidden_dim = trial.suggest_categorical("hidden_dim", [32, 64, 128])
     dropout_rate = trial.suggest_float("dropout_rate", 0.0, 0.2)
     lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
     batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
@@ -38,8 +38,9 @@ def objective(trial):
 
 
     # --- Crear modelo ---
-    model = GCN(
+    model = NNConvNet(
         input_dim=input_dim,
+        edge_dim=3
         hidden_dim=hidden_dim,
         output_dim=1,
         num_layers=num_layers,
@@ -98,8 +99,8 @@ def objective(trial):
 if __name__ == "__main__":
     study = optuna.create_study(
         direction="minimize",
-        study_name="gcn_study_2",
-        storage="sqlite:///gcn_optuna_2.db",  # Persistente para dashboard
+        study_name="nnconv_study_1",
+        storage="sqlite:///nnconv_optuna_1.db",  # Persistente para dashboard
         load_if_exists=True
     )
 

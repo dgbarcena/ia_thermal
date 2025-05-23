@@ -188,7 +188,7 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
     mae_mean = float(torch.tensor(all_mae).mean())
     r2_mean = float(torch.tensor(all_r2).mean())
     acc_mean = float(torch.tensor(all_accuracy).mean())
-    #rmse_mean = np.sqrt(mse_mean)
+    rmse_mean = np.sqrt(mse_mean)
 
     physics_loss_mean = float(torch.tensor(all_physics_loss).mean()) if use_physics else 0.0
     boundary_loss_mean = float(torch.tensor(all_boundary_loss).mean()) if use_boundary_loss else 0.0
@@ -204,6 +204,7 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
         physics_loss_mean,
         boundary_loss_mean,
         heater_loss_mean,
+        rmse_mean,
         val_total_loss
     )
 

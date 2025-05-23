@@ -232,7 +232,7 @@ def UNET_plot_sample_test(model_name:str,finetuning_model_name:str=None,sample_n
         dataset_test:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_test.pth'),weights_only=False)
     else:
         dataset_test:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_test_finetuning.pth'),weights_only=False)
-    #dataset_test.to_cuda()
+    dataset_test.to_cuda()
 
     n_test = dataset_test.inputs.size(0)
 
