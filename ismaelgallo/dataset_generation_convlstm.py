@@ -1,9 +1,32 @@
-
 import numpy as np
 import os
 import sys
 import time
 import torch
+
+def append_and_save(dataset_new, filename):
+    """
+    Añade datos nuevos a un dataset .pth existente, comprobando que la longitud temporal coincide.
+    Si el archivo no existe, lo crea.
+    Al finalizar, imprime la longitud final del dataset.
+    """
+    full_path = os.path.join(path, filename)
+    if os.path.exists(full_path):
+        dataset_old = torch.load(full_path, weights_only=False)
+        # Comprobar que la longitud temporal coincide
+        if dataset_old.inputs.shape[1] != dataset_new.inputs.shape[1]:
+            raise ValueError(
+                f"La longitud temporal (shape[1]) no coincide: "
+                f"existente={dataset_old.inputs.shape[1]}, nuevo={dataset_new.inputs.shape[1]}"
+            )
+        # Concatenar datos
+        dataset_old.inputs = torch.cat([dataset_old.inputs, dataset_new.inputs], dim=0)
+        dataset_old.outputs = torch.cat([dataset_old.outputs, dataset_new.outputs], dim=0)
+        dataset_to_save = dataset_old
+    else:
+        dataset_to_save = dataset_new
+    torch.save(dataset_to_save, full_path)
+    print(f"✅ Guardado '{filename}'. Longitud final del dataset: {len(dataset_to_save)} muestras.")
 
 base_path = os.path.dirname(__file__)
 
@@ -11,19 +34,19 @@ base_path = os.path.dirname(__file__)
 script_path = os.path.join(os.path.dirname(__file__), '..', 'scripts')
 sys.path.append(os.path.abspath(script_path))
 
-# # Añadir 'Convolutional_NN'
-# cnn_path = os.path.abspath(os.path.join(base_path, '..', 'Convolutional_NN'))
-# if cnn_path not in sys.path:
-#     sys.path.append(cnn_path)
+# path directorie for saving datasets
+path = os.path.join(base_path, 'datasets')
+if not os.path.exists(path):
+    os.makedirs(path)
 
 from PCB_solver_tr import PCB_case_2
 from Dataset_Class_convlstm import PCBDataset_convlstm
 
 solver = 'transient' # steady or transient
 
-n_train = 1500
-n_validation = 600
-n_test = 100
+n_train = 1000
+n_validation = 100
+n_test = 10
 n_data = n_train+n_test+n_validation  
 
 # Define los índices para cada split
@@ -32,7 +55,7 @@ idx_val = slice(n_test + n_train, n_test + n_train + n_validation)
 idx_test = slice(0, n_test)
 
 nodes_side = 13
-time_sim = 100
+time_sim = 1000
 dt = 1
 T_init = 298.0
 
@@ -45,20 +68,6 @@ Q_random = np.random.uniform(0.5, 1.0, (n_data, 4))
 T_interfaces_random = np.random.uniform(280, 310, (n_data, 4))
 T_env_random = np.random.uniform(280, 310, n_data)
 
-# Q_random_mean = Q_random.mean()
-# Q_random_std = Q_random.std()
-# Q_random_max = Q_random.max()
-# Q_random_min = Q_random.min()
-# T_interfaces_random_mean = T_interfaces_random.mean()
-# T_interfaces_random_std = T_interfaces_random.std()
-# T_interfaces_random_max = T_interfaces_random.max()
-# T_interfaces_random_min = T_interfaces_random.min()
-# T_env_random_mean = T_env_random.mean()
-# T_env_random_std = T_env_random.std()
-# T_env_random_max = T_env_random.max()
-# T_env_random_min = T_env_random.min()
-
-
 time_start = time.time()
     
 input_seq = []
@@ -67,7 +76,6 @@ output_seq = []
 for i in range(n_data):
     if i % 100 == 0:
         print("Generating element number: ", i, " | time: ", time.time()-time_start)
-    # ...existing code...
     T, _, _, _ = PCB_case_2(
         solver=solver, display=False, time=time_sim, dt=dt, T_init=T_init,
         Q_heaters=Q_random[i], T_interfaces=T_interfaces_random[i], Tenv=T_env_random[i]
@@ -100,10 +108,6 @@ for i in range(n_data):
             T_init_map = np.full((13, 13), T_init, dtype=np.float32)
         else:
             T_init_map = output_seq[-1][t-1]
-        # print("T_map shape:", T_map.shape)
-        # print("Q_map shape:", Q_map.shape)
-        # print("T_env_map shape:", T_env_map.shape)
-        # print("T_init_map shape:", T_init_map.shape)
         # Stack canales
         input_t = np.stack([T_map, Q_map, T_env_map, T_init_map], axis=0)  # (4, 13, 13)
         input_case.append(input_t)
@@ -131,27 +135,11 @@ elif solver == 'steady':
 else:
     raise ValueError("Solver must be 'transient' or 'steady'")
 
-# print("output shape:", output_seq.shape)   # Esperado: (n_data, seq_len, 13, 13)
-
 input_seq = torch.tensor(input_seq, dtype=torch.float32)
 output_seq = torch.tensor(output_seq, dtype=torch.float32)
 
-# T_interfaces = np.zeros((n_data, nodes_side,nodes_side))
-# Q_heaters = np.zeros((n_data, nodes_side,nodes_side))
-# T_env = np.zeros((n_data, nodes_side,nodes_side))
-
-# for i in range(n_data):
-#     Q_heaters[i,6,3], Q_heaters[i,3,6],Q_heaters[i,9,3], Q_heaters[i,9,9] = Q_random[i]
-#     T_interfaces[i,0,0], T_interfaces[i,0,nodes_side-1], T_interfaces[i,nodes_side-1,nodes_side-1], T_interfaces[i,nodes_side-1,0] = T_interfaces_random[i]
-#     T_env[i,:,:] = T_env_random[i]
-    
-# Q_heaters = torch.tensor(Q_heaters,dtype=torch.float32)
-# T_env = torch.tensor(T_env,dtype=torch.float32)
-# T_interfaces = torch.tensor(T_interfaces,dtype=torch.float32)
-
 # calculate averages and standard deviations
 T_interfaces_mean = T_interfaces_random.mean() 
-# print("T_interfaces_mean:", T_interfaces_mean)
 T_interfaces_std = T_interfaces_random.std()
 Q_heaters_mean = Q_random.mean()
 Q_heaters_std = Q_random.std()
@@ -228,11 +216,11 @@ dataset_test = PCBDataset_convlstm(
 path = os.path.join(base_path,'datasets')
 if not os.path.exists(path):
     os.makedirs(path)
-
-torch.save(dataset_train, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_train.pth'))
-torch.save(dataset_test, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_test.pth'))
-torch.save(dataset_val, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_val.pth'))
-torch.save(dataset, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset.pth'))
+    
+append_and_save(dataset_train, 'PCB_convlstm_6ch_transient_dataset_train.pth')
+append_and_save(dataset_val, 'PCB_convlstm_6ch_transient_dataset_val.pth')
+append_and_save(dataset_test, 'PCB_convlstm_6ch_transient_dataset_test.pth')
+append_and_save(dataset, 'PCB_convlstm_6ch_transient_dataset.pth')
 
 
 # # %%
