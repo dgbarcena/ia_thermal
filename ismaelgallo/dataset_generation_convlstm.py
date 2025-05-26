@@ -32,7 +32,7 @@ idx_val = slice(n_test + n_train, n_test + n_train + n_validation)
 idx_test = slice(0, n_test)
 
 nodes_side = 13
-time_sim = 10
+time_sim = 100
 dt = 1
 T_init = 298.0
 
@@ -95,7 +95,7 @@ for i in range(n_data):
         Q_map[9, 3] = Q_random[i, 2]
         Q_map[9, 9] = Q_random[i, 3]
 
-        # Canal 3: output anterior o condición inicial
+        # Canal 6: output anterior o condición inicial
         if t == 0:
             T_init_map = np.full((13, 13), T_init, dtype=np.float32)
         else:

@@ -113,7 +113,7 @@ class PCBDataset_convlstm(Dataset):
                 mask_heaters_map = self.mask_heaters[n, t]  # (13, 13)
         
                 # Stack canales
-                input_t = torch.stack([T_map, Q_map, T_env_map, T_current_map, mask_interfaces_map, mask_heaters_map], dim=0)  # (6, 13, 13)
+                input_t = torch.stack([T_map, Q_map, T_env_map, mask_interfaces_map, mask_heaters_map, T_current_map], dim=0)  # (6, 13, 13)
                 seq_inputs.append(input_t)
             seq_inputs = torch.stack(seq_inputs, dim=0)  # (T, 6, 13, 13)
             self.inputs.append(seq_inputs)
@@ -139,15 +139,15 @@ class PCBDataset_convlstm(Dataset):
         x_denorm[..., 0, :, :] = self.denormalize_T_interfaces(x[..., 0, :, :].to(device))
         x_denorm[..., 1, :, :] = self.denormalize_Q_heaters(x[..., 1, :, :].to(device))
         x_denorm[..., 2, :, :] = self.denormalize_T_env(x[..., 2, :, :].to(device))
-        x_denorm[..., 3, :, :] = self.denormalize_output(x[..., 3, :, :].to(device))
-        x_denorm[..., 4, :, :] = x[..., 4, :, :]  # Mask interfaces (no desnormalizar)
-        x_denorm[..., 5, :, :] = x[..., 5, :, :]  # Mask heaters (no desnormalizar)
+        x_denorm[..., 3, :, :] = x[..., 3, :, :]  # Mask interfaces (no desnormalizar)
+        x_denorm[..., 4, :, :] = x[..., 4, :, :]  # Mask heaters (no desnormalizar)
+        x_denorm[..., 5, :, :] = self.denormalize_output(x[..., 5, :, :].to(device))
 
         return x_denorm
     
     def create_input_from_values(self, Q_heaters, T_interfaces, T_env, T_seq, sequence_length=1001, autorregress=False):
         """
-        Crea un input normalizado de forma (1, T, 4, 13, 13) a partir de:
+        Crea un input normalizado de forma (1, T, 6, 13, 13) a partir de:
         - Q_heaters: np.array de shape (4,)
         - T_interfaces: np.array de shape (4,)
         - T_env: float o escalar
@@ -155,7 +155,7 @@ class PCBDataset_convlstm(Dataset):
         - autorregress: bool, si True, se calcula solo el primer paso de la secuencia
         - sequence_length: int, longitud de la secuencia (por defecto 1001)
 
-        Devuelve: tensor (1, T, 4, 13, 13)
+        Devuelve: tensor (1, T, 6, 13, 13)
         """
         nodes_side = 13
 
@@ -171,7 +171,7 @@ class PCBDataset_convlstm(Dataset):
         T_env_norm = (T_env - self.T_env_mean) / self.T_env_std
         T_seq_norm = (T_seq - self.T_outputs_mean) / self.T_outputs_std
 
-        # Crear mapas (4, 13, 13)
+        # Crear mapas (6, 13, 13)
         Q_map = torch.zeros((13, 13))
         T_map = torch.zeros((13, 13))
         T_env_map = torch.full((13, 13), T_env_norm)
@@ -194,19 +194,15 @@ class PCBDataset_convlstm(Dataset):
             print('Calculando input tensor para predicción, solo el primer paso de la secuencia')
             input_bc = torch.stack([T_map, Q_map, T_env_map, mask_interfaces_map, mask_heaters_map], dim=0)
             input_tensor = torch.zeros((1, 1, 6, nodes_side, nodes_side), dtype=torch.float32) # se añade una dimensión de tiempo
-            input_tensor[:, :, 0:3, :, :] = input_bc[0:3, :, :]
-            input_tensor[:, :, 4, :, :] = input_bc[3, :, :]
-            input_tensor[:, :, 5, :, :] = input_bc[4, :, :]
-            input_tensor[:, :, 3, :, :] = T_seq_norm[0:1, :, :]
+            input_tensor[:, :, 0:5, :, :] = input_bc[0:5, :, :]
+            input_tensor[:, :, 5, :, :] = T_seq_norm[0, :, :]
             print(f"Input tensor shape: {input_tensor.shape}")
         else:
             print('Calculando input tensor para entrenamiento, toda la secuencia con datos del solver')
             input_bc = torch.stack([T_map, Q_map, T_env_map, mask_interfaces_map, mask_heaters_map], dim=0)  # (, 13, 13)
             input_tensor = torch.zeros((1, sequence_length, 6, nodes_side, nodes_side), dtype=torch.float32)
-            input_tensor[:, :, 0:3, :, :] = input_bc[0:3, :, :] 
-            input_tensor[:, :, 4, :, :] = input_bc[3, :, :]  # Mask interfaces
-            input_tensor[:, :, 5, :, :] = input_bc[4, :, :]  # Mask heaters
-            input_tensor[:, :, 3, :, :] = T_seq_norm  # (T, 13, 13)
+            input_tensor[:, :, 0:5, :, :] = input_bc[0:5, :, :] 
+            input_tensor[:, :, 5, :, :] = T_seq_norm  # (T, 13, 13)
             print(f"Input tensor shape: {input_tensor.shape}")  # (1, T, 4, 13, 13)
 
         return input_tensor.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
