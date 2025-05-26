@@ -40,7 +40,7 @@ def objective(trial):
     # --- Crear modelo ---
     model = NNConvNet(
         input_dim=input_dim,
-        edge_dim=3
+        edge_dim=3,
         hidden_dim=hidden_dim,
         output_dim=1,
         num_layers=num_layers,
