@@ -575,7 +575,7 @@ def generar_gif_error_evolucion(model_preds, solver_data, dt=1, nombre_archivo="
 
     ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=interval_ms, blit=False)
 
-    if nombre_archivo:
+    if nombre_archivo and guardar_en_figures:
         base_path = os.getcwd()
         carpeta = os.path.join(base_path, "figures") if guardar_en_figures else base_path
         os.makedirs(carpeta, exist_ok=True)
