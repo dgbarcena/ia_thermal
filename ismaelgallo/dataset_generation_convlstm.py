@@ -44,9 +44,9 @@ from Dataset_Class_convlstm import PCBDataset_convlstm
 
 solver = 'transient' # steady or transient
 
-n_train = 1000
-n_validation = 100
-n_test = 10
+n_train = 2500
+n_validation = 500
+n_test = 50
 n_data = n_train+n_test+n_validation  
 
 # Define los índices para cada split
@@ -55,7 +55,7 @@ idx_val = slice(n_test + n_train, n_test + n_train + n_validation)
 idx_test = slice(0, n_test)
 
 nodes_side = 13
-time_sim = 1000
+time_sim = 100
 dt = 1
 T_init = 298.0
 
@@ -112,6 +112,10 @@ for i in range(n_data):
         input_t = np.stack([T_map, Q_map, T_env_map, T_init_map], axis=0)  # (4, 13, 13)
         input_case.append(input_t)
     input_seq.append(input_case)  # (seq_len, 4, 13, 13)
+    
+time_end = time.time()
+time_generation_data = time_end-time_start
+print("Time to generate the data: ",time_generation_data)
 
 input_seq = np.array(input_seq, dtype=np.float32)   # (n_data, seq_len, 4, 13, 13)
 output_seq = np.array(output_seq, dtype=np.float32) # (n_data, seq_len, 13, 13)
@@ -119,10 +123,6 @@ output_seq = np.array(output_seq, dtype=np.float32) # (n_data, seq_len, 13, 13)
 # Luego sigue igual:
 input_seq = torch.tensor(input_seq, dtype=torch.float32)
 output_seq = torch.tensor(output_seq, dtype=torch.float32)
-    
-time_end = time.time()
-time_generation_data = time_end-time_start
-print("Time to generate the data: ",time_generation_data)
 
 # transform the lists into numpy arrays
 input_seq = np.array(input_seq)   # (n_data, seq_len, 9)
@@ -161,7 +161,8 @@ dataset = PCBDataset_convlstm(
     T_env_mean=T_env_mean,
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
-    T_outputs_std=output_std
+    T_outputs_std=output_std, 
+    return_bc=True
 )
 
 # Dataset de entrenamiento
@@ -177,7 +178,8 @@ dataset_train = PCBDataset_convlstm(
     T_env_mean=T_env_mean,
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
-    T_outputs_std=output_std
+    T_outputs_std=output_std, 
+    return_bc=True
 )
 
 # Dataset de validación
@@ -193,7 +195,8 @@ dataset_val = PCBDataset_convlstm(
     T_env_mean=T_env_mean,
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
-    T_outputs_std=output_std
+    T_outputs_std=output_std, 
+    return_bc=True
 )
 
 # Dataset de test
@@ -209,7 +212,8 @@ dataset_test = PCBDataset_convlstm(
     T_env_mean=T_env_mean,
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
-    T_outputs_std=output_std
+    T_outputs_std=output_std, 
+    return_bc=True
 )
 
 # path directorie for saving datasets
@@ -217,10 +221,13 @@ path = os.path.join(base_path,'datasets')
 if not os.path.exists(path):
     os.makedirs(path)
     
-append_and_save(dataset_train, 'PCB_convlstm_6ch_transient_dataset_train.pth')
-append_and_save(dataset_val, 'PCB_convlstm_6ch_transient_dataset_val.pth')
-append_and_save(dataset_test, 'PCB_convlstm_6ch_transient_dataset_test.pth')
-append_and_save(dataset, 'PCB_convlstm_6ch_transient_dataset.pth')
+append_and_save(dataset_train, 'PCB_convlstm_phy_6ch_transient_dataset_train.pth')
+append_and_save(dataset_val, 'PCB_convlstm_phy_6ch_transient_dataset_val.pth')
+append_and_save(dataset_test, 'PCB_convlstm_phy_6ch_transient_dataset_test.pth')
+append_and_save(dataset, 'PCB_convlstm_phy_6ch_transient_dataset.pth')
+
+time_end = time.time()
+print("Total time to generate and save the dataset: ", time_end - time_start)
 
 
 # # %%

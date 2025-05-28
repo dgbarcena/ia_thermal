@@ -358,19 +358,35 @@ class TotalLoss(nn.Module):
         self.boundary_loss = BoundaryLoss(**boundary_params)
 
     def forward(self, y_hat, y, heaters, interfaces, Tenv):
-        # MSE supervisado en espacio normalizado
+        # 1) Reconstrucción (puede quedarse en half si AMP lo decide)
         loss_rec = self.reconstruction(y_hat, y)
 
-        # Denormalización antes de aplicar la física
-        y_hat_denorm = self.denormalize(y_hat)
-        y_denorm     = self.denormalize(y)
+        # 2) Desnormalizar para física y frontera
+        y_hat_denorm = self.denormalize(y_hat)  # (B,T,1,H,W)
+        y_denorm     = self.denormalize(y)      # (B,T,1,H,W)
 
-        # Física transitoria
-        loss_phys = self.physics_loss(y_hat_denorm, y_denorm, heaters, interfaces, Tenv)
+        # 3) Calcula física y frontera en full-precision
+        #    Desactivamos autocast para estos dos
+        with torch.cuda.amp.autocast(enabled=False):
+            # Asegura que son float32
+            y_hat_fp = y_hat_denorm.float()
+            y_fp     = y_denorm.float()
 
-        # Condiciones de contorno
-        loss_bdry = self.boundary_loss(y_hat_denorm, interfaces)
+            loss_phys = self.physics_loss(
+                y_hat_fp,  # [B,T,1,H,W]
+                y_fp,
+                heaters,   # (B,4)
+                interfaces,# (B,4)
+                Tenv       # (B,1)
+            )
+            loss_bdry = self.boundary_loss(
+                y_hat_fp,  # [B,T,1,H,W]
+                interfaces # (B,4)
+            )
 
-        # Combinación total
-        total = self.lambda_rec * loss_rec + self.lambda_phys * loss_phys + self.lambda_bdry * loss_bdry
+        # 4) Combina con pesos
+        total = (self.lambda_rec  * loss_rec +
+                 self.lambda_phys * loss_phys +
+                 self.lambda_bdry * loss_bdry)
+
         return total, loss_rec, loss_phys, loss_bdry

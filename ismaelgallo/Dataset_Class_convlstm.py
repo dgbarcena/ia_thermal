@@ -4,7 +4,7 @@ import os
 
 #%%
 
-def load_dataset_convlstm(base_path='.', folder='datasets', dataset_type=None, solver='transient'):
+def load_dataset_convlstm(base_path='.', folder='datasets', dataset_type=None, solver='transient', physic=False):   
     """
     Carga un dataset .pth desde una carpeta, por defecto el dataset base completo.
     
@@ -13,14 +13,25 @@ def load_dataset_convlstm(base_path='.', folder='datasets', dataset_type=None, s
     - folder: subcarpeta donde están los archivos (por defecto, 'datasets')
     - dataset_type: 'train', 'test', 'val' o None (por defecto carga el dataset base completo)
     - solver: 'transient' o 'steady' (por defecto 'transient')
+    - physic: si True, carga el dataset con condiciones de contorno físicas (por defecto False)
     """
-    if dataset_type is None:
-        filename = f'PCB_convlstm_6ch_{solver}_dataset.pth'
+    
+    if physic:
+        if dataset_type is None:
+            filename = f'PCB_convlstm_phy_6ch_{solver}_dataset.pth'
+        else:
+            valid_types = ['train', 'test', 'val']
+            if dataset_type not in valid_types:
+                raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None para el dataset base.")
+            filename = f"PCB_convlstm_phy_6ch_{solver}_dataset_{dataset_type}.pth"
     else:
-        valid_types = ['train', 'test', 'val']
-        if dataset_type not in valid_types:
-            raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None para el dataset base.")
-        filename = f"PCB_convlstm_6ch_{solver}_dataset_{dataset_type}.pth"
+        if dataset_type is None:
+            filename = f'PCB_convlstm_6ch_{solver}_dataset.pth'
+        else:
+            valid_types = ['train', 'test', 'val']
+            if dataset_type not in valid_types:
+                raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None para el dataset base.")
+            filename = f"PCB_convlstm_6ch_{solver}_dataset_{dataset_type}.pth"
 
     full_path = os.path.join(base_path, folder, filename)
 
@@ -50,6 +61,10 @@ class PCBDataset_convlstm(Dataset):
         """
         
         self.return_bc = return_bc
+        
+        self._T_int_maps_raw = T_interfaces.clone()
+        self._Q_maps_raw     = Q_heaters.clone()
+        self._T_env_maps_raw = T_env.clone()
         
         mask_interfaces = (T_interfaces != 0).float()
         # print(f"Mask interfaces: {mask_interfaces}")  # (N, T, 13, 13)
@@ -96,6 +111,7 @@ class PCBDataset_convlstm(Dataset):
         self.Q_heaters = (Q_heaters - Q_heaters_mean) / Q_heaters_std
         self.T_env = (T_env - T_env_mean) / T_env_std
         self.outputs = (T_outputs - T_outputs_mean) / T_outputs_std
+        self.outputs = self.outputs.unsqueeze(2)                     # (N, T, 1, 13, 13)
         self.T_current = (T_current - T_outputs_mean) / T_outputs_std
         
         self.T_interfaces = self.T_interfaces * mask_interfaces # aplicar máscara
@@ -229,18 +245,35 @@ class PCBDataset_convlstm(Dataset):
         return self.inputs.shape[0]
 
     def __getitem__(self, idx):
-        input_data = self.inputs[idx]
-        output_data = self.outputs[idx]
-        if output_data.ndim == 2 and output_data.shape[-1] == 169:
-            output_data = output_data.view(-1, 13, 13)
-
+        """
+        Devuelve por defecto:
+          input_data : Tensor (T, 6, 13, 13)
+          output_data: Tensor (T, 1, 13, 13)  ← ya con canal
+        Si return_bc=True, además:
+          q_heat : Tensor (4,)
+          t_int  : Tensor (4,)
+          t_env  : Tensor (1,)
+        """
+        # 1) Entradas y salidas normalizadas
+        input_data  = self.inputs[idx]   # (T, 6, 13, 13)
+        output_data = self.outputs[idx]  # (T, 1, 13, 13)
+        
         if self.return_bc:
-            t_int = self.denormalize_T_interfaces(self.T_interfaces[idx])
-            q_heat = self.denormalize_Q_heaters(self.Q_heaters[idx])
-            t_env = self.denormalize_T_env(self.T_env[idx])
+            # 2) Extraer mapas crudos del primer paso (t=0)
+            q_map_raw     = self._Q_maps_raw[idx, 0]    # (13, 13)
+            t_int_map_raw = self._T_int_maps_raw[idx, 0]# (13, 13)
+            t_env_map_raw = self._T_env_maps_raw[idx, 0] # (13, 13)
+        
+            # 3) Obtener vectores de 4 y 1 elementos
+            q_heat, t_int, t_env = self.extract_bc_values(
+                q_map_raw, t_int_map_raw, t_env_map_raw
+            )
+            # q_heat: (4,), t_int: (4,), t_env: (1,)
+        
             return input_data, output_data, q_heat, t_int, t_env
-
+        
         return input_data, output_data
+
     
     def to_device(self):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -336,7 +369,7 @@ class TrimmedDataset_convlstm(Dataset):
 # -----------------------------------------------------------------------------
 def load_trimmed_dataset_convlstm(base_path='.', folder='datasets', dataset_type=None,
                          max_samples=None, time_steps_input=None, time_steps_output=None,
-                         to_device=False, solver='transient'):
+                         to_device=False, solver='transient', physic=False):
     """
     Carga un dataset base y lo encapsula en un TrimmedDataset, compatible con casos transitorios y estacionarios.
 
@@ -349,17 +382,27 @@ def load_trimmed_dataset_convlstm(base_path='.', folder='datasets', dataset_type
         time_steps_output (int): número de pasos temporales de salida (si es transitorio)
         to_device (bool): si se debe mover a CUDA (si está disponible)
         solver (str): 'transient' o 'steady'
+        physic (bool): si True, devuelve un dataset con condiciones de contorno físicas
 
     Returns:
         TrimmedDataset
     """
-    if dataset_type is None:
-        filename = f'PCB_convlstm_6ch_{solver}_dataset.pth'
+    if physic:
+        if dataset_type is None:
+            filename = f'PCB_convlstm_phy_6ch_{solver}_dataset.pth'
+        else:
+            valid_types = ['train', 'test', 'val']
+            if dataset_type not in valid_types:
+                raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None.")
+            filename = f"PCB_convlstm_phy_6ch_{solver}_dataset_{dataset_type}.pth"
     else:
-        valid_types = ['train', 'test', 'val']
-        if dataset_type not in valid_types:
-            raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None.")
-        filename = f"PCB_convlstm_6ch_{solver}_dataset_{dataset_type}.pth"
+        if dataset_type is None:
+            filename = f'PCB_convlstm_6ch_{solver}_dataset.pth'
+        else:
+            valid_types = ['train', 'test', 'val']
+            if dataset_type not in valid_types:
+                raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None.")
+            filename = f"PCB_convlstm_6ch_{solver}_dataset_{dataset_type}.pth"
 
     full_path = os.path.join(base_path, folder, filename)
 
