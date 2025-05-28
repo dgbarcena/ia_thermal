@@ -330,6 +330,7 @@ class BoundaryLoss(nn.Module):
         
         return loss
     
+    
 class TotalLoss(nn.Module):
     def __init__(self, 
                  mse_weight=1.0,
