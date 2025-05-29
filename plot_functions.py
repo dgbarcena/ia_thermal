@@ -665,25 +665,30 @@ def generar_gif_temperatura(temperaturas, dt=1.0, nombre_archivo="temperatura_ev
 
 
 #%%
-def plot_mae_per_pixel(y_true, y_pred, dataset = None):
+def plot_mae_per_pixel(y_true, y_pred, dataset=None):
     """
     Calcula y grafica el error absoluto medio (MAE) por píxel acumulado en el tiempo para una predicción.
     Si se proporciona un dataset, se desnormaliza el error.
     Compatible con modelos que usan (x, y) o (x, t, y).
+    Ahora acepta arrays de numpy o tensores torch.
     """
+    # Convertir a numpy si es tensor
+    if isinstance(y_true, torch.Tensor):
+        y_true = y_true.detach().cpu().numpy()
+    if isinstance(y_pred, torch.Tensor):
+        y_pred = y_pred.detach().cpu().numpy()
 
+    # MAE por píxel acumulado en el tiempo
+    error_map = np.mean(np.abs(y_true - y_pred), axis=0)  # (H, W)
 
-    error_map = torch.mean(torch.abs(y_true - y_pred), dim=0)  # (13, 13)
+    # Desnormalizar si corresponde
     if dataset is not None:
-        error_map = error_map * dataset.T_outputs_std.cpu()  # (13, 13)
+        std = dataset.T_outputs_std.cpu().numpy() if isinstance(dataset.T_outputs_std, torch.Tensor) else dataset.T_outputs_std
+        error_map = error_map * std
 
     plt.figure(figsize=(5, 5))
     plt.imshow(error_map, cmap='hot')
-    if dataset is not None:
-        plt.title("MAE acumulado [K]")
-    else:
-        plt.title("MAE acumulado")
-    plt.title("Mapa de error absoluto medio por píxel")
+    plt.title("MAE acumulado [K]" if dataset is not None else "MAE acumulado")
     plt.axis('off')
     plt.tight_layout()
     plt.show()
@@ -693,29 +698,32 @@ def plot_mae_per_pixel(y_true, y_pred, dataset = None):
     
     
 #%%
-def plot_mae_per_frame(y_true, y_pred, dataset = None):
+def plot_mae_per_frame(y_true, y_pred, dataset=None):
     """
     Calcula y grafica el error absoluto medio (MAE) por paso temporal en escala original 
     para una muestra del dataloader. Compatible con modelos que usan (x, y) o (x, t, y).
+    Ahora acepta arrays de numpy o tensores torch.
     """
-    
+    # Convertir a numpy si es tensor
+    if isinstance(y_true, torch.Tensor):
+        y_true = y_true.detach().cpu().numpy()
+    if isinstance(y_pred, torch.Tensor):
+        y_pred = y_pred.detach().cpu().numpy()
+
+    # Desnormalizar si corresponde
     if dataset is not None:
-        # Desnormalizar salidas
-        std = dataset.T_outputs_std.cpu()
+        std = dataset.T_outputs_std.cpu().numpy() if isinstance(dataset.T_outputs_std, torch.Tensor) else dataset.T_outputs_std
         y_true = y_true * std
         y_pred = y_pred * std
 
     # MAE por paso temporal
-    mae_per_t = torch.mean(torch.abs(y_true - y_pred), dim=(1, 2))  # (T,)
+    mae_per_t = np.mean(np.abs(y_true - y_pred), axis=(1, 2))  # (T,)
 
     plt.figure(figsize=(8, 4))
     plt.plot(mae_per_t, marker='o')
     plt.title("Error absoluto medio por paso temporal (desnormalizado)")
     plt.xlabel("Paso temporal t")
-    if dataset is not None:
-        plt.ylabel("MAE [K]")
-    else:
-        plt.ylabel("MAE")
+    plt.ylabel("MAE [K]" if dataset is not None else "MAE")
     plt.grid(True)
     plt.tight_layout()
     plt.show()
