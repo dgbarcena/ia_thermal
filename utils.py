@@ -557,3 +557,68 @@ def plot_loss_curves(train_loss, val_loss):
 #     preds_denorm = preds_norm * std + mean      # (1, T, 1, H, W)
 #     preds_denorm = preds_denorm.squeeze(0).squeeze(1)  # (T, 13,13)
 #     return preds_denorm.cpu().numpy()
+
+
+def predict_from_conditions(Q_heaters: np.ndarray,
+                            T_interfaces: np.ndarray,
+                            T_env: float,
+                            sequence_length: int = 1001,
+                            T_seq_initial: np.ndarray = None,
+                            model=None,
+                            dataset=None,
+                            device=None) -> np.ndarray:
+    """
+    Genera una predicción completa de long. sequence_length a partir de:
+      - Q_heaters:        (4,)             np.ndarray
+      - T_interfaces:     (4,)             np.ndarray
+      - T_env:            scalar           float
+      - T_seq_initial:    (13,13)          np.ndarray (el mapa inicial)
+      - sequence_length:  número de pasos a predecir
+      - model:            tu PCB_ConvLSTM cargado y en .eval()
+      - dataset:          instancia de PCBDataset_convlstm con create_input_from_values
+      - device:           opcional, torch.device
+
+    Devuelve:
+      np.ndarray de forma (sequence_length, 13, 13) con la serie desnormalizada.
+    """
+
+    model.eval()
+    if device is None:
+        device = next(model.parameters()).device
+        
+    if T_seq_initial is None:
+        T_seq_initial = np.full((13, 13), 298.0)  # Mapa por defecto a 298 K
+
+    # 1) Primer input (1,1,6,13,13)
+    input0 = dataset.create_input_from_values(
+        Q_heaters, T_interfaces, T_env,
+        T_seq=np.expand_dims(T_seq_initial, 0),
+        sequence_length=sequence_length,
+        autorregress=True
+    ).to(device)
+
+    # 2) Prepara contornos y t_prev
+    # bc_static: (1, seq_len, 5, 13,13)
+    bc_static = input0[:, :1, :5, :, :].repeat(1, sequence_length, 1, 1, 1)
+    # t_prev: (1,1,1,13,13)
+    t_prev = input0[:, :1, 5:6, :, :]
+
+    # 3) Roll-out autoregresivo
+    preds_norm = []
+    hidden = None
+    with torch.no_grad():
+        for t in range(sequence_length):
+            # concatenar por canal (dim=2)
+            x_t = torch.cat([bc_static[:, t:t+1], t_prev], dim=2)  # → (1,1,6,13,13)
+            pred_t, hidden = model.forward_step(x_t, hidden)       # → (1,1,1,13,13)
+            t_prev = pred_t                                        # mantener shape
+            preds_norm.append(t_prev)
+
+    preds_norm = torch.cat(preds_norm, dim=1)  # (1, T, 1, 13,13)
+
+    # 4) Desnormalizar y to numpy
+    mean = dataset.T_outputs_mean.to(device)
+    std  = dataset.T_outputs_std.to(device)
+    preds_denorm = preds_norm * std + mean      # (1, T, 1, H, W)
+    preds_denorm = preds_denorm.squeeze(0).squeeze(1)  # (T, 13,13)
+    return preds_denorm.cpu().numpy()

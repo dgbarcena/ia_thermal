@@ -55,7 +55,7 @@ idx_val = slice(n_test + n_train, n_test + n_train + n_validation)
 idx_test = slice(0, n_test)
 
 nodes_side = 13
-time_sim = 500
+time_sim = 100
 dt = 1
 T_init = 298.0
 
