@@ -55,7 +55,7 @@ idx_val = slice(n_test + n_train, n_test + n_train + n_validation)
 idx_test = slice(0, n_test)
 
 nodes_side = 13
-time_sim = 100
+time_sim = 500
 dt = 1
 T_init = 298.0
 
@@ -64,9 +64,23 @@ output_seq = []
 
 np.random.seed(0)
 
-Q_random = np.random.uniform(0.5, 1.0, (n_data, 4))
-T_interfaces_random = np.random.uniform(280, 310, (n_data, 4))
-T_env_random = np.random.uniform(280, 310, n_data)
+
+def generate_unique_cases(n_data):
+    seen = set()
+    Q_list, T_int_list, T_env_list = [], [], []
+    while len(Q_list) < n_data:
+        Q = tuple(np.random.uniform(0.5, 1.5, 4).round(6))  # redondea para evitar problemas de precisión
+        T_int = tuple(np.random.uniform(270, 320, 4).round(2))
+        T_env = round(float(np.random.uniform(270, 320)), 2)
+        key = Q + T_int + (T_env,)
+        if key not in seen:
+            seen.add(key)
+            Q_list.append(Q)
+            T_int_list.append(T_int)
+            T_env_list.append(T_env)
+    return np.array(Q_list), np.array(T_int_list), np.array(T_env_list)
+
+Q_random, T_interfaces_random, T_env_random = generate_unique_cases(n_data)
 
 time_start = time.time()
     
@@ -221,6 +235,11 @@ path = os.path.join(base_path,'datasets')
 if not os.path.exists(path):
     os.makedirs(path)
     
+# append_and_save(dataset_train, 'PCB_convlstm_6ch_transient_dataset_train.pth')
+# append_and_save(dataset_val, 'PCB_convlstm_6ch_transient_dataset_val.pth')
+# append_and_save(dataset_test, 'PCB_convlstm_6ch_transient_dataset_test.pth')
+# append_and_save(dataset, 'PCB_convlstm_6ch_transient_dataset.pth')
+
 append_and_save(dataset_train, 'PCB_convlstm_phy_6ch_transient_dataset_train.pth')
 append_and_save(dataset_val, 'PCB_convlstm_phy_6ch_transient_dataset_val.pth')
 append_and_save(dataset_test, 'PCB_convlstm_phy_6ch_transient_dataset_test.pth')
