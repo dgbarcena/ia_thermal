@@ -4,29 +4,6 @@ import sys
 import time
 import torch
 
-def append_and_save(dataset_new, filename):
-    """
-    Añade datos nuevos a un dataset .pth existente, comprobando que la longitud temporal coincide.
-    Si el archivo no existe, lo crea.
-    Al finalizar, imprime la longitud final del dataset.
-    """
-    full_path = os.path.join(path, filename)
-    if os.path.exists(full_path):
-        dataset_old = torch.load(full_path, weights_only=False)
-        # Comprobar que la longitud temporal coincide
-        if dataset_old.inputs.shape[1] != dataset_new.inputs.shape[1]:
-            raise ValueError(
-                f"La longitud temporal (shape[1]) no coincide: "
-                f"existente={dataset_old.inputs.shape[1]}, nuevo={dataset_new.inputs.shape[1]}"
-            )
-        # Concatenar datos
-        dataset_old.inputs = torch.cat([dataset_old.inputs, dataset_new.inputs], dim=0)
-        dataset_old.outputs = torch.cat([dataset_old.outputs, dataset_new.outputs], dim=0)
-        dataset_to_save = dataset_old
-    else:
-        dataset_to_save = dataset_new
-    torch.save(dataset_to_save, full_path)
-    print(f"✅ Guardado '{filename}'. Longitud final del dataset: {len(dataset_to_save)} muestras.")
 
 base_path = os.path.dirname(__file__)
 
@@ -44,9 +21,9 @@ from Dataset_Class_convlstm import PCBDataset_convlstm
 
 solver = 'transient' # steady or transient
 
-n_train = 2500
-n_validation = 500
-n_test = 50
+n_train = 1000
+n_validation = 200
+n_test = 20
 n_data = n_train+n_test+n_validation  
 
 # Define los índices para cada split
@@ -55,7 +32,7 @@ idx_val = slice(n_test + n_train, n_test + n_train + n_validation)
 idx_test = slice(0, n_test)
 
 nodes_side = 13
-time_sim = 100
+time_sim = 1000
 dt = 1
 T_init = 298.0
 
@@ -235,32 +212,17 @@ path = os.path.join(base_path,'datasets')
 if not os.path.exists(path):
     os.makedirs(path)
     
-# append_and_save(dataset_train, 'PCB_convlstm_6ch_transient_dataset_train.pth')
-# append_and_save(dataset_val, 'PCB_convlstm_6ch_transient_dataset_val.pth')
-# append_and_save(dataset_test, 'PCB_convlstm_6ch_transient_dataset_test.pth')
-# append_and_save(dataset, 'PCB_convlstm_6ch_transient_dataset.pth')
+    
 
-append_and_save(dataset_train, 'PCB_convlstm_phy_6ch_transient_dataset_train.pth')
-append_and_save(dataset_val, 'PCB_convlstm_phy_6ch_transient_dataset_val.pth')
-append_and_save(dataset_test, 'PCB_convlstm_phy_6ch_transient_dataset_test.pth')
-append_and_save(dataset, 'PCB_convlstm_phy_6ch_transient_dataset.pth')
+torch.save(dataset_train, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_train.pth'))
+torch.save(dataset_test, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_test.pth'))
+torch.save(dataset_val, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_val.pth'))
+torch.save(dataset, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset.pth'))
+
+# torch.save(dataset_train, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_train.pth'))
+# torch.save(dataset_test, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_test.pth'))
+# torch.save(dataset_val, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_val.pth'))
+# torch.save(dataset, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset.pth'))
 
 time_end = time.time()
 print("Total time to generate and save the dataset: ", time_end - time_start)
-
-
-# # %%
-# print("input_seq shape:", input_seq.shape)     # Esperado: (n_data, seq_len, 9)
-# print("output_seq shape:", output_seq.shape)   # Esperado: (n_data, seq_len, 13, 13)
-
-# x, y = dataset[0]
-# print("x shape:", x.shape)  # Esperado: (seq_len, 4, 13, 13)
-# print("y shape:", y.shape)  # Esperado: (seq_len, 13, 13)
-
-# from torch.utils.data import DataLoader
-
-# loader = DataLoader(dataset, batch_size=2)
-# for x_batch, y_batch in loader:
-#     print(x_batch.shape)  # (batch, seq_len, 4, 13, 13)
-#     print(y_batch.shape)  # (batch, seq_len, 13, 13)
-#     break
