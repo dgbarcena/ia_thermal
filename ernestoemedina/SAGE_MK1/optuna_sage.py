@@ -24,11 +24,11 @@ def get_dataloaders(batch_size, dir_path):
 
 def objective(trial):
     # --- Hiperparámetros a optimizar ---
-    num_layers = trial.suggest_int("num_layers", 3, 10)
-    hidden_dim = trial.suggest_categorical("hidden_dim", [32, 64, 128])
+    num_layers = trial.suggest_int("num_layers", 2, 10)
+    hidden_dim = trial.suggest_categorical("hidden_dim", [8, 9, 16, 32, 64, 128])
     dropout_rate = trial.suggest_float("dropout_rate", 0.0, 0.2)
     lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
-    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
+    batch_size = trial.suggest_categorical("batch_size", [8, 16, 32, 64])
     
 
 
@@ -97,8 +97,8 @@ def objective(trial):
 if __name__ == "__main__":
     study = optuna.create_study(
         direction="minimize",
-        study_name="sage_study_1",
-        storage="sqlite:///sage_optuna_1.db",  # Persistente para dashboard
+        study_name="sage_study_2",
+        storage="sqlite:///sage_optuna_2.db",  # Persistente para dashboard
         load_if_exists=True
     )
 
