@@ -44,7 +44,7 @@ class GraphSAGE(nn.Module):
                 if self.use_batchnorm:
                     x = self.norms[i](x)
 
-                x = F.relu(x)
+                x = F.silu(x)
 
                 if self.use_dropout:
                     x = F.dropout(x, p=self.dropout_rate, training=self.training)
