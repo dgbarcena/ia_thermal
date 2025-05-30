@@ -273,18 +273,6 @@ def configurar_graficos(verbose=False):
     if verbose:
         print("🎨 Estilo gráfico configurado con fondo blanco y paleta 'colorblind'.")
         
-#%%
-def plot_loss_curves(train_loss, val_loss):
-    plt.figure(figsize=(10, 6))
-    plt.plot(train_loss, label='Pérdida Entrenamiento', color='tab:blue')
-    plt.plot(val_loss, label='Pérdida Validación', color='tab:orange')
-    plt.xlabel('Épocas')
-    plt.ylabel('Loss (MSE)')
-    plt.yscale('log')
-    plt.title('Curvas de pérdida durante el entrenamiento')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
     
 #%%
 # def entrenar_modelo_cuda(

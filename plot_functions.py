@@ -122,38 +122,26 @@ def visualizar_valores_vectoreslatentes(output, target):
     
 #%%
 
-def plot_loss_evolution(train_loss, test_loss):
-    
+def plot_loss_curves(train_loss, val_loss, save_as_pdf=False, filename='loss_curves'):
     """
-    Plot the training and validation loss
-    
-    Args:
-    train_loss (list): list with the training loss
-    test_loss (list): list with the test loss
-    
+    Grafica las curvas de pérdida de entrenamiento y validación.
+    Ajusta el eje x solo a las épocas representadas y permite guardar como PDF.
     """
-    
-    epochs = np.arange(1, len(train_loss)+1)
-    
-    
-    plt.plot(epochs, train_loss, label='Train', color='blue')
-    plt.plot(epochs, test_loss, label='Test', color='red')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
+    plt.figure(figsize=(10, 6))
+    epochs = np.arange(1, max(len(train_loss), len(val_loss)) + 1)
+    plt.plot(epochs[:len(train_loss)], train_loss, label='Pérdida Entrenamiento', color='tab:blue')
+    plt.plot(epochs[:len(val_loss)], val_loss, label='Pérdida Validación', color='tab:orange')
+    plt.xlabel('Épocas')
+    plt.ylabel('Loss (MSE)')
     plt.yscale('log')
+    plt.title('Curvas de pérdida durante el entrenamiento')
     plt.legend()
-    
-    # Ajustar los ticks del eje x dinámicamente
-    max_ticks = 10  # Número máximo de ticks que deseas mostrar
-    if len(epochs) > max_ticks:
-        tick_positions = np.linspace(1, len(epochs), num=max_ticks, dtype=int)
-        plt.xticks(tick_positions)  # Mostrar solo los ticks seleccionados
-    else:
-        plt.xticks(epochs)  # Mostrar todos los ticks si hay pocos
-        
-    # Ajustar los límites del eje x al rango de valores de las épocas
-    plt.xlim(epochs[0], epochs[-1])
-    
+    plt.grid(True)
+    plt.xlim(epochs[0], epochs[max(len(train_loss), len(val_loss)) - 1])
+    plt.tight_layout()
+    if save_as_pdf:
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf')
     plt.show()
     
 
@@ -927,7 +915,7 @@ def generar_gif_temperatura(temperaturas, dt=1.0, nombre_archivo="temperatura_ev
 
 
 #%%
-def plot_mae_per_pixel(y_true, y_pred, dataset=None):
+def plot_mae_per_pixel(y_true, y_pred, dataset=None, save_as_pdf=False, filename='mae_per_pixel'):
     """
     Calcula y grafica el error absoluto medio (MAE) por píxel acumulado en el tiempo para una predicción.
     Si se proporciona un dataset, se desnormaliza el error.
@@ -948,11 +936,25 @@ def plot_mae_per_pixel(y_true, y_pred, dataset=None):
         std = dataset.T_outputs_std.cpu().numpy() if isinstance(dataset.T_outputs_std, torch.Tensor) else dataset.T_outputs_std
         error_map = error_map * std
 
-    plt.figure(figsize=(5, 5))
-    plt.imshow(error_map, cmap='hot')
-    plt.title("MAE acumulado [K]" if dataset is not None else "MAE acumulado")
-    plt.axis('off')
-    plt.tight_layout()
+    fig, ax = plt.subplots(figsize=(5, 5))
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
+
+    im = ax.imshow(error_map, cmap='hot')
+    ax.set_title("MAE acumulado [K]" if dataset is not None else "MAE acumulado", color='black')
+    ax.axis('off')
+
+    # Barra de color al margen derecho
+    cbar_ax = fig.add_axes([0.88, 0.2, 0.04, 0.6])
+    cbar = plt.colorbar(im, cax=cbar_ax)
+    cbar.set_label('MAE [K]' if dataset is not None else 'MAE', fontsize=12, color='black')
+    cbar.ax.yaxis.set_tick_params(color='black')
+    plt.setp(cbar.ax.yaxis.get_ticklabels(), color='black')
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    if save_as_pdf:
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf', facecolor='white')
     plt.show()
     
 
@@ -964,7 +966,7 @@ def plot_mae_per_pixel_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None,
     """
     Calcula y grafica el MAE por píxel acumulado en el tiempo para dos predicciones.
     Si se proporciona un dataset, se desnormaliza el error.
-    Muestra ambos mapas lado a lado.
+    Muestra ambos mapas lado a lado con una barra de color común al margen derecho.
 
     Parámetros:
         y_true: array o tensor (T, H, W) – ground truth
@@ -975,10 +977,6 @@ def plot_mae_per_pixel_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None,
         save_as_pdf: bool – si es True, guarda la figura como PDF en 'figures'
         filename: string – nombre base del archivo (sin extensión)
     """
-    import torch
-    import numpy as np
-    import matplotlib.pyplot as plt
-    import os
 
     # Convertir a numpy si es tensor
     if isinstance(y_true, torch.Tensor):
@@ -999,31 +997,48 @@ def plot_mae_per_pixel_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None,
         error_map_fis = error_map_fis * std
 
     vmax = max(error_map_nofis.max(), error_map_fis.max())
+    vmin = 0
 
-    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-    im0 = axs[0].imshow(error_map_nofis, cmap='hot', vmin=0, vmax=vmax)
-    axs[0].set_title(titles[0])
+    fig, axs = plt.subplots(1, 2, figsize=(11, 5))
+    fig.patch.set_facecolor('white')
+    for ax in axs:
+        ax.set_facecolor('white')
+
+    im0 = axs[0].imshow(error_map_nofis, cmap='hot', vmin=vmin, vmax=vmax)
+    axs[0].set_title(titles[0], color='black')
     axs[0].axis('off')
-    plt.colorbar(im0, ax=axs[0])
 
-    im1 = axs[1].imshow(error_map_fis, cmap='hot', vmin=0, vmax=vmax)
-    axs[1].set_title(titles[1])
+    im1 = axs[1].imshow(error_map_fis, cmap='hot', vmin=vmin, vmax=vmax)
+    axs[1].set_title(titles[1], color='black')
     axs[1].axis('off')
-    plt.colorbar(im1, ax=axs[1])
 
-    plt.tight_layout()
+    # Barra de color común al margen derecho (solo una para ambos)
+    cbar_ax = fig.add_axes([0.92, 0.2, 0.02, 0.6])
+    cbar = plt.colorbar(im1, cax=cbar_ax)
+    cbar.set_label('MAE [K]' if dataset is not None else 'MAE', fontsize=12, color='black')
+    cbar.ax.yaxis.set_tick_params(color='black')
+    plt.setp(cbar.ax.yaxis.get_ticklabels(), color='black')
+
+    plt.tight_layout(rect=[0, 0, 0.9, 1])
     if save_as_pdf:
         os.makedirs('figures', exist_ok=True)
-        plt.savefig(f'figures/{filename}.pdf', format='pdf')
+        plt.savefig(f'figures/{filename}.pdf', format='pdf', facecolor='white')
     plt.show()
     
     
 #%%
-def plot_mae_per_frame(y_true, y_pred, dataset=None):
+def plot_mae_per_frame(y_true, y_pred, dataset=None, save_as_pdf=False, filename='mae_per_frame', yscale='log'):
     """
     Calcula y grafica el error absoluto medio (MAE) por paso temporal en escala original 
     para una muestra del dataloader. Compatible con modelos que usan (x, y) o (x, t, y).
     Ahora acepta arrays de numpy o tensores torch.
+    Parámetros:
+        y_true: array o tensor (T, H, W) – ground truth
+        y_pred: array o tensor (T, H, W) – predicción del modelo
+        dataset: objeto dataset para desnormalizar (opcional)
+        save_as_pdf: bool – si es True, guarda la figura como PDF en 'figures'
+        filename: string – nombre base del archivo (sin extensión)
+        yscale: str – escala del eje y ('linear' o 'log')
     """
     # Convertir a numpy si es tensor
     if isinstance(y_true, torch.Tensor):
@@ -1045,18 +1060,25 @@ def plot_mae_per_frame(y_true, y_pred, dataset=None):
     plt.title("Error absoluto medio por paso temporal (desnormalizado)")
     plt.xlabel("Paso temporal t")
     plt.ylabel("MAE [K]" if dataset is not None else "MAE")
+    if yscale == 'log':
+        plt.yscale('log')
+    elif yscale == 'linear':
+        plt.yscale('linear')
+    else:
+        raise ValueError("y_scale debe ser 'log' o 'linear'")
+    plt.xlim(0, len(mae_per_t) - 1)
     plt.grid(True)
     plt.tight_layout()
+    if save_as_pdf:
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf')
     plt.show()
-
-    # return mae_per_t
 
 
 #%%
-
 def plot_mae_per_frame_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None, 
                             labels=("Sin física", "Con física"),
-                            save_as_pdf=False, filename='mae_per_frame_2way'):
+                            save_as_pdf=False, filename='mae_per_frame_2way', yscale='log'):
     """
     Calcula y grafica el MAE por paso temporal para dos predicciones.
     Si se proporciona un dataset, se desnormaliza el error.
@@ -1070,11 +1092,8 @@ def plot_mae_per_frame_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None,
         labels: tupla de strings – etiquetas para las curvas
         save_as_pdf: bool – si es True, guarda la figura como PDF en 'figures'
         filename: string – nombre base del archivo (sin extensión)
+        yscale: str – escala del eje y ('linear' o 'log')
     """
-    import torch
-    import numpy as np
-    import matplotlib.pyplot as plt
-    import os
 
     # Convertir a numpy si es tensor
     if isinstance(y_true, torch.Tensor):
@@ -1095,12 +1114,20 @@ def plot_mae_per_frame_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None,
     mae_nofis = np.mean(np.abs(y_true - y_pred_nofis), axis=(1, 2))  # (T,)
     mae_fis = np.mean(np.abs(y_true - y_pred_fis), axis=(1, 2))      # (T,)
 
+    steps = np.arange(len(mae_nofis))
     plt.figure(figsize=(8, 4))
-    plt.plot(mae_nofis, marker='o', label=labels[0])
-    plt.plot(mae_fis, marker='s', label=labels[1])
+    plt.plot(steps, mae_nofis, marker='o', label=labels[0])
+    plt.plot(steps, mae_fis, marker='s', label=labels[1])
     plt.title("Error absoluto medio por paso temporal (desnormalizado)")
     plt.xlabel("Paso temporal t")
     plt.ylabel("MAE [K]" if dataset is not None else "MAE")
+    plt.xlim(steps[0], steps[-1])  # Limitar eje x a los valores representados
+    if yscale == 'log':
+        plt.yscale('log')
+    elif yscale == 'linear':
+        plt.yscale('linear')
+    else:
+        raise ValueError("y_scale debe ser 'log' o 'linear'")
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
