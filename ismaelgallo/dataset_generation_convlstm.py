@@ -44,9 +44,9 @@ from Dataset_Class_convlstm import PCBDataset_convlstm
 
 solver = 'transient' # steady or transient
 
-n_train = 2500
-n_validation = 500
-n_test = 50
+n_train = 3000
+n_validation = 600
+n_test = 100
 n_data = n_train+n_test+n_validation  
 
 # Define los índices para cada split
@@ -55,7 +55,7 @@ idx_val = slice(n_test + n_train, n_test + n_train + n_validation)
 idx_test = slice(0, n_test)
 
 nodes_side = 13
-time_sim = 100
+time_sim = 1
 dt = 1
 T_init = 298.0
 
