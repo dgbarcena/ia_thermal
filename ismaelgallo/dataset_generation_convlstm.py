@@ -4,7 +4,6 @@ import sys
 import time
 import torch
 
-
 base_path = os.path.dirname(__file__)
 
 # Añadir 'scripts'
@@ -153,7 +152,7 @@ dataset = PCBDataset_convlstm(
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
     T_outputs_std=output_std, 
-    return_bc=True
+    return_bc=False
 )
 
 # Dataset de entrenamiento
@@ -170,7 +169,7 @@ dataset_train = PCBDataset_convlstm(
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
     T_outputs_std=output_std, 
-    return_bc=True
+    return_bc=False
 )
 
 # Dataset de validación
@@ -187,7 +186,7 @@ dataset_val = PCBDataset_convlstm(
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
     T_outputs_std=output_std, 
-    return_bc=True
+    return_bc=False
 )
 
 # Dataset de test
@@ -204,7 +203,7 @@ dataset_test = PCBDataset_convlstm(
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
     T_outputs_std=output_std, 
-    return_bc=True
+    return_bc=False
 )
 
 # path directorie for saving datasets
