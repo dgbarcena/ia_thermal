@@ -48,7 +48,7 @@ def train(model, loader, optimizer, device, norm_info,
             Q_heaters_norm=batch.x[:, 2]
         ).detach() if use_heater_loss else torch.tensor(0.0, device=device)
 
-        loss = 0*loss_data + lambda_physics * loss_physics + lambda_boundary * loss_boundary + lambda_heater * loss_heater
+        loss = loss_data + lambda_physics * loss_physics + lambda_boundary * loss_boundary + lambda_heater * loss_heater
         loss.backward()
         optimizer.step()
 
@@ -175,7 +175,7 @@ def evaluate(model, loader, device, norm_info, error_threshold,
     heater_loss_mean = torch.stack(all_heater_loss).mean().item() if use_heater_loss else 0.0
 
     val_total_loss = (
-        0*mse_mean
+        mse_mean
         + lambda_physics * physics_loss_mean
         + lambda_boundary * boundary_loss_mean
         + lambda_heater * heater_loss_mean
