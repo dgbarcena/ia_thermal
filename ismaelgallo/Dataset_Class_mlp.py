@@ -114,7 +114,7 @@ class PCBDataset_mlp(Dataset):
     
     def create_input_from_values(self, Q_heaters, T_interfaces, T_env, time, sequence_length=1001):
         """
-        Crea un input normalizado de forma (9) a partir de:
+        Crea un input normalizado de forma (10) a partir de:
         - Q_heaters: np.array de shape (4)
         - T_interfaces: np.array de shape (4)
         - T_env: float o escalar
@@ -204,14 +204,42 @@ class TrimmedDataset_mlp(Dataset):
         self.base_dataset = base_dataset
         self.time_steps_per_case = time_steps_per_case
         total_cases = len(base_dataset) // time_steps_per_case
-        self.max_cases = max_cases or total_cases
-        self.length = self.max_cases * self.time_steps_per_case
+        if max_cases is not None:
+            total_cases = min(total_cases, max_cases)
+        n_samples = total_cases * time_steps_per_case
+        n_samples = min(n_samples, len(base_dataset))
+        # self.length = self.max_cases * self.time_steps_per_case
+        
+        self.indices = list(range(n_samples))
+        
+        # self.indices = []
+        # for case_idx in range(self.max_cases):
+        #     start = case_idx * time_steps_per_case
+        #     for t in range(time_steps_per_case):
+        #         self.indices.append(start + t)
 
     def __len__(self):
-        return self.length
+        return len(self.indices)
 
     def __getitem__(self, idx):
-        return self.base_dataset[idx]
+        real_idx = self.indices[idx]
+        return self.base_dataset[real_idx]
+    
+    def to_device(self, device=None):
+        """
+        Mueve los tensores internos a CUDA/CPU.
+        """
+        if device is None:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # Si el dataset base tiene to_device, úsalo
+        if hasattr(self.base_dataset, 'to_device'):
+            self.base_dataset.to_device()
+        # Si es un TensorDataset, mueve los tensores manualmente
+        elif isinstance(self.base_dataset, TensorDataset):
+            tensors = tuple(t.to(device) for t in self.base_dataset.tensors)
+            self.base_dataset = TensorDataset(*tensors)
+        else:
+            raise NotImplementedError("El método to_device no está implementado para este tipo de dataset base.")
 
 
 def load_trimmed_dataset_mlp(base_path='.', folder='datasets', dataset_type=None,
@@ -250,12 +278,14 @@ def load_trimmed_dataset_mlp(base_path='.', folder='datasets', dataset_type=None
     if isinstance(base_dataset, tuple):
         base_dataset = TensorDataset(base_dataset[0], base_dataset[1])
 
-    if to_device and hasattr(base_dataset, 'to_device'):
-        base_dataset.to_device()
-        print("Dataset movido a GPU/CPU según disponibilidad")
-
-    return TrimmedDataset_mlp(
+    trimmed = TrimmedDataset_mlp(
         base_dataset=base_dataset,
         max_cases=max_cases,
         time_steps_per_case=time_steps_per_case
     )
+    
+    if to_device:
+        trimmed.to_device()
+        # print("Dataset movido a GPU/CPU según disponibilidad")
+        
+    return trimmed

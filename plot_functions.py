@@ -122,38 +122,26 @@ def visualizar_valores_vectoreslatentes(output, target):
     
 #%%
 
-def plot_loss_evolution(train_loss, test_loss):
-    
+def plot_loss_curves(train_loss, val_loss, save_as_pdf=False, filename='loss_curves'):
     """
-    Plot the training and validation loss
-    
-    Args:
-    train_loss (list): list with the training loss
-    test_loss (list): list with the test loss
-    
+    Grafica las curvas de pérdida de entrenamiento y validación.
+    Ajusta el eje x solo a las épocas representadas y permite guardar como PDF.
     """
-    
-    epochs = np.arange(1, len(train_loss)+1)
-    
-    
-    plt.plot(epochs, train_loss, label='Train', color='black')
-    plt.plot(epochs, test_loss, label='Test', color='red')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
+    plt.figure(figsize=(10, 6))
+    epochs = np.arange(1, max(len(train_loss), len(val_loss)) + 1)
+    plt.plot(epochs[:len(train_loss)], train_loss, label='Pérdida Entrenamiento', color='tab:blue')
+    plt.plot(epochs[:len(val_loss)], val_loss, label='Pérdida Validación', color='tab:orange')
+    plt.xlabel('Épocas')
+    plt.ylabel('Loss (MSE)')
     plt.yscale('log')
+    plt.title('Curvas de pérdida durante el entrenamiento')
     plt.legend()
-    
-    # Ajustar los ticks del eje x dinámicamente
-    max_ticks = 10  # Número máximo de ticks que deseas mostrar
-    if len(epochs) > max_ticks:
-        tick_positions = np.linspace(1, len(epochs), num=max_ticks, dtype=int)
-        plt.xticks(tick_positions)  # Mostrar solo los ticks seleccionados
-    else:
-        plt.xticks(epochs)  # Mostrar todos los ticks si hay pocos
-        
-    # Ajustar los límites del eje x al rango de valores de las épocas
-    plt.xlim(epochs[0], epochs[-1])
-    
+    plt.grid(True)
+    plt.xlim(epochs[0], epochs[max(len(train_loss), len(val_loss)) - 1])
+    plt.tight_layout()
+    if save_as_pdf:
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf')
     plt.show()
     
 
@@ -299,6 +287,82 @@ def plot_nodes_evolution(y_pred, y_true, nodes_idx, dt=1, together=True, save_as
             axs[i].set_ylabel('Temperature [K]')
             axs[i].set_xlim(time[0], time[-1])
 
+            if i == len(nodes_idx) - 1:
+                axs[i].set_xlabel('Time [s]')
+            if i == 0:
+                axs[i].legend(loc='upper right')
+
+        fig.suptitle('Time evolution of temperature in selected nodes', fontsize=16)
+        fig.align_ylabels()
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
+
+        if save_as_pdf:
+            os.makedirs('figures', exist_ok=True)
+            fig.savefig(f'figures/{filename}.pdf', format='pdf')
+        plt.show()
+        
+    
+#%%
+def plot_nodes_evolution_3way(y_true, y_pred_nofis, y_pred_fis, nodes_idx, dt=1, together=True, save_as_pdf=False, filename='nodes_evolution_3way'):
+    """
+    Muestra la evolución temporal de las temperaturas reales y predichas (modelo sin física y con física) en una serie de nodos.
+
+    Parámetros:
+        y_true: array (T, H, W) - ground truth
+        y_pred_nofis: array (T, H, W) - predicción modelo sin física
+        y_pred_fis: array (T, H, W) - predicción modelo con física
+        nodes_idx: lista de índices de los nodos a mostrar [(idx1, idy1), ...]
+        dt: intervalo de tiempo entre cada paso de tiempo
+        together: si es True, muestra todas las evoluciones en un solo gráfico
+        save_as_pdf: si es True, guarda la figura como PDF en la carpeta 'figures'
+        filename: nombre base del archivo (sin extensión)
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import os
+
+    time = np.arange(y_true.shape[0]) * dt
+
+    if together:
+        plt.figure(figsize=(12, 6))
+        for i, node_idx in enumerate(nodes_idx):
+            color = plt.cm.tab10(i % 10)
+            label = f'Node ({node_idx[0]}, {node_idx[1]})'
+
+            y_true_node = y_true[:, node_idx[0], node_idx[1]]
+            y_pred_nofis_node = y_pred_nofis[:, node_idx[0], node_idx[1]]
+            y_pred_fis_node = y_pred_fis[:, node_idx[0], node_idx[1]]
+
+            plt.plot(time, y_true_node, label=f'{label} - Ground Truth', color=color, linewidth=2)
+            plt.plot(time, y_pred_nofis_node, 'x--', label=f'{label} - No Physics', color=color, alpha=0.7)
+            plt.plot(time, y_pred_fis_node, 'o:', label=f'{label} - Physics', color=color, alpha=0.7)
+
+        plt.xlabel('Time [s]')
+        plt.ylabel('Temperature [K]')
+        plt.title('Time evolution of temperature in selected nodes')
+        plt.xlim(time[0], time[-1])
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+
+        if save_as_pdf:
+            os.makedirs('figures', exist_ok=True)
+            plt.savefig(f'figures/{filename}.pdf', format='pdf')
+        plt.show()
+
+    else:
+        fig, axs = plt.subplots(len(nodes_idx), 1, figsize=(12, 3 * len(nodes_idx)), sharex=True)
+        if len(nodes_idx) == 1:
+            axs = [axs]
+
+        for i, node_idx in enumerate(nodes_idx):
+            color = plt.cm.tab10(i % 10)
+            axs[i].plot(time, y_true[:, node_idx[0], node_idx[1]], label='Ground truth', color=color, linewidth=2)
+            axs[i].plot(time, y_pred_nofis[:, node_idx[0], node_idx[1]], 'x--', label='No Physics', color=color, alpha=0.7)
+            axs[i].plot(time, y_pred_fis[:, node_idx[0], node_idx[1]], 'o:', label='Physics', color=color, alpha=0.7)
+            axs[i].set_title(f"Node ({node_idx[0]}, {node_idx[1]})")
+            axs[i].set_ylabel('Temperature [K]')
+            axs[i].set_xlim(time[0], time[-1])
             if i == len(nodes_idx) - 1:
                 axs[i].set_xlabel('Time [s]')
             if i == 0:
@@ -505,6 +569,99 @@ def generar_gif_pcb_comparacion(model_preds, solver_data, dt=1, nombre_archivo="
     
     return ani
 
+#%%
+def generar_gif_pcb_comparacion_3way(model_preds_nofis, model_preds_fis, solver_data, dt=1, nombre_archivo="comparison_evolution_3way",
+                                     guardar_en_figures=False, duracion_total=10.0):
+    """
+    Genera un GIF comparando las predicciones de dos modelos (sin física y con física) y los datos del solver.
+    Muestra los tres mapas lado a lado, con barra de progreso y tiempo.
+
+    Args:
+        model_preds_nofis (np.ndarray): Array (T, H, W) de predicciones del modelo sin física.
+        model_preds_fis (np.ndarray): Array (T, H, W) de predicciones del modelo con física.
+        solver_data (np.ndarray): Array (T, H, W) de datos del solver (ground truth).
+        dt (float): Paso temporal entre frames (en segundos).
+        nombre_archivo (str or None): Nombre base del archivo (sin extensión). Si None, no se guarda.
+        guardar_en_figures (bool): Si True, guarda el gif en la carpeta 'figures/' junto al notebook.
+        duracion_total (float): Duración total del gif en segundos.
+
+    Returns:
+        ani (matplotlib.animation.FuncAnimation): Objeto de animación para uso en Jupyter.
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import matplotlib.animation as animation
+    from matplotlib.patches import Rectangle
+    import os
+
+    assert model_preds_nofis.shape == model_preds_fis.shape == solver_data.shape, "Las formas deben coincidir."
+    total_frames = model_preds_nofis.shape[0]
+
+    # Calcular fps e intervalo para mantener la duración total deseada
+    fps = total_frames / duracion_total
+    interval_ms = int(1000 / fps)
+
+    # Crear figura
+    fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+    fig.patch.set_facecolor('white')
+    for ax in axs:
+        ax.set_facecolor('white')
+
+    vmin = min(model_preds_nofis.min(), model_preds_fis.min(), solver_data.min())
+    vmax = max(model_preds_nofis.max(), model_preds_fis.max(), solver_data.max())
+    im0 = axs[0].imshow(model_preds_nofis[0], vmin=vmin, vmax=vmax, cmap='jet')
+    im1 = axs[1].imshow(model_preds_fis[0], vmin=vmin, vmax=vmax, cmap='jet')
+    im2 = axs[2].imshow(solver_data[0], vmin=vmin, vmax=vmax, cmap='jet')
+
+    axs[0].set_title("Modelo sin física", fontsize=14, color='black')
+    axs[1].set_title("Modelo con física", fontsize=14, color='black')
+    axs[2].set_title("Solver", fontsize=14, color='black')
+    for ax in axs:
+        ax.axis('off')
+
+    # Barra de color común
+    cbar_ax = fig.add_axes([0.94, 0.2, 0.02, 0.6])
+    cbar = plt.colorbar(im0, cax=cbar_ax)
+    cbar.ax.yaxis.set_tick_params(color='black')
+    plt.setp(cbar.ax.yaxis.get_ticklabels(), color='black', fontsize=10)
+
+    # Barra de progreso con fondo
+    progress_ax = fig.add_axes([0.25, 0.01, 0.5, 0.02])
+    progress_ax.set_xlim(0, 1)
+    progress_ax.set_ylim(0, 1)
+    progress_ax.axis('off')
+    background_bar = Rectangle((0, 0), 1, 1, color='lightgray')
+    progress_bar = Rectangle((0, 0), 0, 1, color='blue')
+    progress_ax.add_patch(background_bar)
+    progress_ax.add_patch(progress_bar)
+
+    # Texto del tiempo fuera de la barra
+    tiempo_num = fig.text(0.5, 0.045, "0.00 s", ha='center', va='bottom', fontsize=18, color='black')
+
+    # Función de actualización
+    def update(frame):
+        im0.set_data(model_preds_nofis[frame])
+        im1.set_data(model_preds_fis[frame])
+        im2.set_data(solver_data[frame])
+        tiempo_actual = frame * dt
+        progress_bar.set_width((frame + 1) / total_frames)
+        tiempo_num.set_text(f"{tiempo_actual:.2f} s")
+        return im0, im1, im2, progress_bar, tiempo_num
+
+    ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=interval_ms, blit=False)
+
+    if nombre_archivo and guardar_en_figures:
+        base_path = os.getcwd()
+        carpeta = os.path.join(base_path, "figures")
+        os.makedirs(carpeta, exist_ok=True)
+        ruta_salida = os.path.join(carpeta, f"{nombre_archivo}.gif")
+        print(f"Guardando gif en: {ruta_salida}")
+        ani.save(ruta_salida, writer='pillow', fps=fps, savefig_kwargs={'facecolor': 'white'})
+        print("Gif guardado.")
+    plt.close()
+
+    return ani
+
 
 #%%
 
@@ -575,7 +732,7 @@ def generar_gif_error_evolucion(model_preds, solver_data, dt=1, nombre_archivo="
 
     ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=interval_ms, blit=False)
 
-    if nombre_archivo:
+    if nombre_archivo and guardar_en_figures:
         base_path = os.getcwd()
         carpeta = os.path.join(base_path, "figures") if guardar_en_figures else base_path
         os.makedirs(carpeta, exist_ok=True)
@@ -584,6 +741,99 @@ def generar_gif_error_evolucion(model_preds, solver_data, dt=1, nombre_archivo="
         plt.close()
     else:
         plt.close()
+
+    return ani
+
+
+#%%
+def generar_gif_error_evolucion_2way(model_preds_nofis, model_preds_fis, solver_data, dt=1, nombre_archivo="error_evolution_2way",
+                                     guardar_en_figures=False, duracion_total=10.0):
+    """
+    Genera un GIF mostrando la evolución del error absoluto de dos modelos respecto al solver.
+    Muestra ambos mapas de error lado a lado, con barra de progreso y tiempo.
+
+    Args:
+        model_preds_nofis (np.ndarray): Array (T, H, W) de predicciones del modelo sin física.
+        model_preds_fis (np.ndarray): Array (T, H, W) de predicciones del modelo con física.
+        solver_data (np.ndarray): Array (T, H, W) de datos del solver (ground truth).
+        dt (float): Paso temporal entre frames (en segundos).
+        nombre_archivo (str or None): Nombre base del archivo (sin extensión). Si None, no se guarda.
+        guardar_en_figures (bool): Si True, guarda el gif en la carpeta 'figures/' junto al notebook.
+        duracion_total (float): Duración total del gif en segundos.
+
+    Returns:
+        ani (matplotlib.animation.FuncAnimation): Objeto de animación para uso en Jupyter.
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import matplotlib.animation as animation
+    from matplotlib.patches import Rectangle
+    import os
+
+    assert model_preds_nofis.shape == model_preds_fis.shape == solver_data.shape, "Las formas deben coincidir."
+    total_frames = model_preds_nofis.shape[0]
+
+    error_abs_nofis = np.abs(model_preds_nofis - solver_data)
+    error_abs_fis = np.abs(model_preds_fis - solver_data)
+
+    # Calcular fps e intervalo para mantener la duración total deseada
+    fps = total_frames / duracion_total
+    interval_ms = int(1000 / fps)
+
+    # Crear figura
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig.patch.set_facecolor('white')
+    for ax in axs:
+        ax.set_facecolor('white')
+
+    vmax = max(error_abs_nofis.max(), error_abs_fis.max())
+    im0 = axs[0].imshow(error_abs_nofis[0], vmin=0.0, vmax=vmax, cmap='hot')
+    im1 = axs[1].imshow(error_abs_fis[0], vmin=0.0, vmax=vmax, cmap='hot')
+
+    axs[0].set_title("Error absoluto - Sin física", fontsize=14, color='black')
+    axs[1].set_title("Error absoluto - Con física", fontsize=14, color='black')
+    for ax in axs:
+        ax.axis('off')
+
+    # Barra de color común
+    cbar_ax = fig.add_axes([0.92, 0.2, 0.02, 0.6])
+    cbar = plt.colorbar(im0, cax=cbar_ax)
+    cbar.ax.yaxis.set_tick_params(color='black')
+    plt.setp(cbar.ax.yaxis.get_ticklabels(), color='black', fontsize=10)
+
+    # Barra de progreso con fondo
+    progress_ax = fig.add_axes([0.25, 0.01, 0.5, 0.02])
+    progress_ax.set_xlim(0, 1)
+    progress_ax.set_ylim(0, 1)
+    progress_ax.axis('off')
+    background_bar = Rectangle((0, 0), 1, 1, color='lightgray')
+    progress_bar = Rectangle((0, 0), 0, 1, color='blue')
+    progress_ax.add_patch(background_bar)
+    progress_ax.add_patch(progress_bar)
+
+    # Texto del tiempo fuera de la barra
+    tiempo_num = fig.text(0.5, 0.045, "0.00 s", ha='center', va='bottom', fontsize=18, color='black')
+
+    # Función de actualización
+    def update(frame):
+        im0.set_data(error_abs_nofis[frame])
+        im1.set_data(error_abs_fis[frame])
+        tiempo_actual = frame * dt
+        progress_bar.set_width((frame + 1) / total_frames)
+        tiempo_num.set_text(f"{tiempo_actual:.2f} s")
+        return im0, im1, progress_bar, tiempo_num
+
+    ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=interval_ms, blit=False)
+
+    if nombre_archivo and guardar_en_figures:
+        base_path = os.getcwd()
+        carpeta = os.path.join(base_path, "figures")
+        os.makedirs(carpeta, exist_ok=True)
+        ruta_salida = os.path.join(carpeta, f"{nombre_archivo}.gif")
+        print(f"Guardando gif en: {ruta_salida}")
+        ani.save(ruta_salida, writer='pillow', fps=fps, savefig_kwargs={'facecolor': 'white'})
+        print("Gif guardado.")
+    plt.close()
 
     return ani
 
@@ -665,82 +915,223 @@ def generar_gif_temperatura(temperaturas, dt=1.0, nombre_archivo="temperatura_ev
 
 
 #%%
-def plot_mae_per_pixel(model, dataloader, dataset, device, sample_idx=0):
+def plot_mae_per_pixel(y_true, y_pred, dataset=None, save_as_pdf=False, filename='mae_per_pixel'):
     """
-    Calcula y grafica el error absoluto medio (MAE) por píxel acumulado en el tiempo para una muestra del dataloader.
+    Calcula y grafica el error absoluto medio (MAE) por píxel acumulado en el tiempo para una predicción.
+    Si se proporciona un dataset, se desnormaliza el error.
     Compatible con modelos que usan (x, y) o (x, t, y).
+    Ahora acepta arrays de numpy o tensores torch.
     """
-    model.eval()
-    model.to(device)
-    with torch.no_grad():
-        for batch in dataloader:
-            if len(batch) == 3:
-                x, t, y = batch
-                x, t, y = x.to(device), t.to(device), y.to(device)
-                y_pred = model(x, t)
-            else:
-                x, y = batch
-                x, y = x.to(device), y.to(device)
-                y_pred = model(x)
-            break  # solo un batch
+    # Convertir a numpy si es tensor
+    if isinstance(y_true, torch.Tensor):
+        y_true = y_true.detach().cpu().numpy()
+    if isinstance(y_pred, torch.Tensor):
+        y_pred = y_pred.detach().cpu().numpy()
 
-    y_true = y[sample_idx].squeeze(1).cpu()       # (T, 13, 13)
-    y_pred = y_pred[sample_idx].squeeze(1).cpu()  # (T, 13, 13)
+    # MAE por píxel acumulado en el tiempo
+    error_map = np.mean(np.abs(y_true - y_pred), axis=0)  # (H, W)
 
-    error_map = torch.mean(torch.abs(y_true - y_pred), dim=0)  # (13, 13)
-    error_map_real = error_map * dataset.T_outputs_std.cpu()  # (13, 13)
+    # Desnormalizar si corresponde
+    if dataset is not None:
+        std = dataset.T_outputs_std.cpu().numpy() if isinstance(dataset.T_outputs_std, torch.Tensor) else dataset.T_outputs_std
+        error_map = error_map * std
 
-    plt.figure(figsize=(5, 5))
-    plt.imshow(error_map_real, cmap='hot')
-    plt.colorbar(label="MAE acumulado[K]")
-    plt.title("Mapa de error absoluto medio por píxel")
-    plt.axis('off')
-    plt.tight_layout()
+    fig, ax = plt.subplots(figsize=(5, 5))
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
+
+    im = ax.imshow(error_map, cmap='hot')
+    ax.set_title("MAE acumulado [K]" if dataset is not None else "MAE acumulado", color='black')
+    ax.axis('off')
+
+    # Barra de color al margen derecho
+    cbar_ax = fig.add_axes([0.88, 0.2, 0.04, 0.6])
+    cbar = plt.colorbar(im, cax=cbar_ax)
+    cbar.set_label('MAE [K]' if dataset is not None else 'MAE', fontsize=12, color='black')
+    cbar.ax.yaxis.set_tick_params(color='black')
+    plt.setp(cbar.ax.yaxis.get_ticklabels(), color='black')
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    if save_as_pdf:
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf', facecolor='white')
     plt.show()
+    
 
+    
+#%%
+def plot_mae_per_pixel_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None, 
+                            titles=("MAE sin física", "MAE con física"),
+                            save_as_pdf=False, filename='mae_per_pixel_2way'):
+    """
+    Calcula y grafica el MAE por píxel acumulado en el tiempo para dos predicciones.
+    Si se proporciona un dataset, se desnormaliza el error.
+    Muestra ambos mapas lado a lado con una barra de color común al margen derecho.
 
+    Parámetros:
+        y_true: array o tensor (T, H, W) – ground truth
+        y_pred_nofis: array o tensor (T, H, W) – predicción modelo sin física
+        y_pred_fis: array o tensor (T, H, W) – predicción modelo con física
+        dataset: objeto dataset para desnormalizar (opcional)
+        titles: tupla de strings – títulos personalizados para los mapas
+        save_as_pdf: bool – si es True, guarda la figura como PDF en 'figures'
+        filename: string – nombre base del archivo (sin extensión)
+    """
 
+    # Convertir a numpy si es tensor
+    if isinstance(y_true, torch.Tensor):
+        y_true = y_true.detach().cpu().numpy()
+    if isinstance(y_pred_nofis, torch.Tensor):
+        y_pred_nofis = y_pred_nofis.detach().cpu().numpy()
+    if isinstance(y_pred_fis, torch.Tensor):
+        y_pred_fis = y_pred_fis.detach().cpu().numpy()
+
+    # MAE por píxel acumulado en el tiempo
+    error_map_nofis = np.mean(np.abs(y_true - y_pred_nofis), axis=0)  # (H, W)
+    error_map_fis = np.mean(np.abs(y_true - y_pred_fis), axis=0)      # (H, W)
+
+    # Desnormalizar si corresponde
+    if dataset is not None:
+        std = dataset.T_outputs_std.cpu().numpy() if isinstance(dataset.T_outputs_std, torch.Tensor) else dataset.T_outputs_std
+        error_map_nofis = error_map_nofis * std
+        error_map_fis = error_map_fis * std
+
+    vmax = max(error_map_nofis.max(), error_map_fis.max())
+    vmin = 0
+
+    fig, axs = plt.subplots(1, 2, figsize=(11, 5))
+    fig.patch.set_facecolor('white')
+    for ax in axs:
+        ax.set_facecolor('white')
+
+    im0 = axs[0].imshow(error_map_nofis, cmap='hot', vmin=vmin, vmax=vmax)
+    axs[0].set_title(titles[0], color='black')
+    axs[0].axis('off')
+
+    im1 = axs[1].imshow(error_map_fis, cmap='hot', vmin=vmin, vmax=vmax)
+    axs[1].set_title(titles[1], color='black')
+    axs[1].axis('off')
+
+    # Barra de color común al margen derecho (solo una para ambos)
+    cbar_ax = fig.add_axes([0.92, 0.2, 0.02, 0.6])
+    cbar = plt.colorbar(im1, cax=cbar_ax)
+    cbar.set_label('MAE [K]' if dataset is not None else 'MAE', fontsize=12, color='black')
+    cbar.ax.yaxis.set_tick_params(color='black')
+    plt.setp(cbar.ax.yaxis.get_ticklabels(), color='black')
+
+    plt.tight_layout(rect=[0, 0, 0.9, 1])
+    if save_as_pdf:
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf', facecolor='white')
+    plt.show()
     
     
 #%%
-def plot_mae_per_frame(model, dataloader, dataset, device, sample_idx=0):
+def plot_mae_per_frame(y_true, y_pred, dataset=None, save_as_pdf=False, filename='mae_per_frame', yscale='log'):
     """
-    Calcula y grafica el error absoluto medio (MAE) por paso temporal en escala original (desnormalizada)
+    Calcula y grafica el error absoluto medio (MAE) por paso temporal en escala original 
     para una muestra del dataloader. Compatible con modelos que usan (x, y) o (x, t, y).
+    Ahora acepta arrays de numpy o tensores torch.
+    Parámetros:
+        y_true: array o tensor (T, H, W) – ground truth
+        y_pred: array o tensor (T, H, W) – predicción del modelo
+        dataset: objeto dataset para desnormalizar (opcional)
+        save_as_pdf: bool – si es True, guarda la figura como PDF en 'figures'
+        filename: string – nombre base del archivo (sin extensión)
+        yscale: str – escala del eje y ('linear' o 'log')
     """
-    model.eval()
-    model.to(device)
-    with torch.no_grad():
-        for batch in dataloader:
-            if len(batch) == 3:
-                x, t, y = batch
-                x, t, y = x.to(device), t.to(device), y.to(device)
-                y_pred = model(x, t)
-            else:
-                x, y = batch
-                x, y = x.to(device), y.to(device)
-                y_pred = model(x)
-            break  # solo un batch
+    # Convertir a numpy si es tensor
+    if isinstance(y_true, torch.Tensor):
+        y_true = y_true.detach().cpu().numpy()
+    if isinstance(y_pred, torch.Tensor):
+        y_pred = y_pred.detach().cpu().numpy()
 
-    y_true = y[sample_idx].squeeze(1).cpu()       # (T, 13, 13)
-    y_pred = y_pred[sample_idx].squeeze(1).cpu()  # (T, 13, 13)
-
-    # Desnormalizar salidas
-    std = dataset.T_outputs_std.cpu()
-    y_true_denorm = y_true * std
-    y_pred_denorm = y_pred * std
+    # Desnormalizar si corresponde
+    if dataset is not None:
+        std = dataset.T_outputs_std.cpu().numpy() if isinstance(dataset.T_outputs_std, torch.Tensor) else dataset.T_outputs_std
+        y_true = y_true * std
+        y_pred = y_pred * std
 
     # MAE por paso temporal
-    mae_per_t = torch.mean(torch.abs(y_true_denorm - y_pred_denorm), dim=(1, 2))  # (T,)
+    mae_per_t = np.mean(np.abs(y_true - y_pred), axis=(1, 2))  # (T,)
 
     plt.figure(figsize=(8, 4))
     plt.plot(mae_per_t, marker='o')
     plt.title("Error absoluto medio por paso temporal (desnormalizado)")
     plt.xlabel("Paso temporal t")
-    plt.ylabel("MAE [K]")
+    plt.ylabel("MAE [K]" if dataset is not None else "MAE")
+    if yscale == 'log':
+        plt.yscale('log')
+    elif yscale == 'linear':
+        plt.yscale('linear')
+    else:
+        raise ValueError("y_scale debe ser 'log' o 'linear'")
+    plt.xlim(0, len(mae_per_t) - 1)
     plt.grid(True)
     plt.tight_layout()
+    if save_as_pdf:
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf')
     plt.show()
 
-    # return mae_per_t
 
+#%%
+def plot_mae_per_frame_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None, 
+                            labels=("Sin física", "Con física"),
+                            save_as_pdf=False, filename='mae_per_frame_2way', yscale='log'):
+    """
+    Calcula y grafica el MAE por paso temporal para dos predicciones.
+    Si se proporciona un dataset, se desnormaliza el error.
+    Muestra ambas curvas en el mismo gráfico.
+
+    Parámetros:
+        y_true: array o tensor (T, H, W) – ground truth
+        y_pred_nofis: array o tensor (T, H, W) – predicción modelo sin física
+        y_pred_fis: array o tensor (T, H, W) – predicción modelo con física
+        dataset: objeto dataset para desnormalizar (opcional)
+        labels: tupla de strings – etiquetas para las curvas
+        save_as_pdf: bool – si es True, guarda la figura como PDF en 'figures'
+        filename: string – nombre base del archivo (sin extensión)
+        yscale: str – escala del eje y ('linear' o 'log')
+    """
+
+    # Convertir a numpy si es tensor
+    if isinstance(y_true, torch.Tensor):
+        y_true = y_true.detach().cpu().numpy()
+    if isinstance(y_pred_nofis, torch.Tensor):
+        y_pred_nofis = y_pred_nofis.detach().cpu().numpy()
+    if isinstance(y_pred_fis, torch.Tensor):
+        y_pred_fis = y_pred_fis.detach().cpu().numpy()
+
+    # Desnormalizar si corresponde
+    if dataset is not None:
+        std = dataset.T_outputs_std.cpu().numpy() if isinstance(dataset.T_outputs_std, torch.Tensor) else dataset.T_outputs_std
+        y_true = y_true * std
+        y_pred_nofis = y_pred_nofis * std
+        y_pred_fis = y_pred_fis * std
+
+    # MAE por paso temporal
+    mae_nofis = np.mean(np.abs(y_true - y_pred_nofis), axis=(1, 2))  # (T,)
+    mae_fis = np.mean(np.abs(y_true - y_pred_fis), axis=(1, 2))      # (T,)
+
+    steps = np.arange(len(mae_nofis))
+    plt.figure(figsize=(8, 4))
+    plt.plot(steps, mae_nofis, marker='o', label=labels[0])
+    plt.plot(steps, mae_fis, marker='s', label=labels[1])
+    plt.title("Error absoluto medio por paso temporal (desnormalizado)")
+    plt.xlabel("Paso temporal t")
+    plt.ylabel("MAE [K]" if dataset is not None else "MAE")
+    plt.xlim(steps[0], steps[-1])  # Limitar eje x a los valores representados
+    if yscale == 'log':
+        plt.yscale('log')
+    elif yscale == 'linear':
+        plt.yscale('linear')
+    else:
+        raise ValueError("y_scale debe ser 'log' o 'linear'")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    if save_as_pdf:
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf')
+    plt.show()

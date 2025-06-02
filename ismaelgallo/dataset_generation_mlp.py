@@ -21,9 +21,9 @@ from PCB_solver_tr import PCB_case_2
 
 solver = 'transient' # steady or transient
 
-n_train = 30000
-n_validation = 3000
-n_test = 500
+n_train = 1500
+n_validation = 300
+n_test = 50
 n_cases = n_train+n_test+n_validation  
 
 
@@ -43,8 +43,8 @@ output = np.empty((n_data, nodes_side*nodes_side))
 
 np.random.seed(0)
 
-Q_random = np.random.uniform(0.5, 1.0, (n_cases, 4))
 T_interfaces_random = np.random.uniform(280, 310, (n_cases, 4))
+Q_random = np.random.uniform(0.5, 1.0, (n_cases, 4))
 T_env_random = np.random.uniform(280, 310, n_cases)
 time_column = np.arange(seq_len).reshape(-1, 1)  # Forma (seq_len, 1)
 
@@ -79,8 +79,8 @@ output = np.array(output)
 input = torch.tensor(input,dtype=torch.float32)
 output = torch.tensor(output,dtype=torch.float32)
 
-Q_random = input[:, :4]
-T_interfaces_random = input[:, 4:8]
+T_interfaces_random = input[:, :4]
+Q_random = input[:, 4:8]
 T_env_random = input[:, 8]
 time_column = input[:, 9]
 

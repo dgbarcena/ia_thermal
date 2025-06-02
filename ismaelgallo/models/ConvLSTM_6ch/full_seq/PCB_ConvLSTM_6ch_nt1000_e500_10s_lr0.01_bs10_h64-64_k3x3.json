@@ -1,0 +1,43 @@
+{
+    "start_datetime": "2025-05-21 16:21:59",
+    "training_duration_minutes": 0.35495585997899376,
+    "system_specs": {
+        "os": "Windows",
+        "os_version": "10.0.19041",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 158 Stepping 10, GenuineIntel",
+        "python_version": "3.9.21",
+        "device": "cuda",
+        "gpu_name": "NVIDIA GeForce GTX 1050",
+        "gpu_memory_total_GB": 2.0,
+        "cuda_version": "11.8"
+    },
+    "hidden_dims": [
+        64,
+        64
+    ],
+    "kernel_size": "3x3",
+    "batch_size": 10,
+    "lr": 0.01,
+    "scheduler": {
+        "type": "ReduceLROnPlateau",
+        "factor": 0.1,
+        "patience": 10,
+        "final_lr": 0.01
+    },
+    "early_stop_patience": 100,
+    "epochs_trained": 4,
+    "best_val_loss": 0.0001604921417310834,
+    "train_loss": [
+        0.0969061094848439,
+        0.0022725583717692643,
+        0.000538774874585215,
+        0.00034808604294084944
+    ],
+    "val_loss": [
+        0.005210184957832098,
+        0.0008465294085908681,
+        0.0003078743611695245,
+        0.0001604921417310834
+    ]
+}

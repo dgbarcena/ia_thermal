@@ -1,0 +1,43 @@
+{
+    "start_datetime": "2025-05-28 09:53:47",
+    "training_duration_minutes": 0.030127755800882974,
+    "system_specs": null,
+    "hidden_dims": [
+        64,
+        64
+    ],
+    "kernel_size": [
+        3,
+        3
+    ],
+    "batch_size": 128,
+    "lr": 0.01,
+    "scheduler": {
+        "type": "ReduceLROnPlateau",
+        "factor": 0.1,
+        "patience": 10,
+        "final_lr": 0.01
+    },
+    "weitghts": {
+        "mse": 1.0,
+        "physics": 1.0,
+        "boundary": 1.0
+    },
+    "early_stop_patience": 50,
+    "epochs_trained": 5,
+    "best_val_loss": 124.95655059814453,
+    "train_loss": [
+        128.0840606689453,
+        128.08407592773438,
+        128.08407592773438,
+        128.08407592773438,
+        128.08407592773438
+    ],
+    "val_loss": [
+        124.95655059814453,
+        124.95655059814453,
+        124.95655059814453,
+        124.95655059814453,
+        124.95655059814453
+    ]
+}
