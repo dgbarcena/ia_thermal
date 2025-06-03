@@ -20,9 +20,9 @@ from Dataset_Class_convlstm import PCBDataset_convlstm
 
 solver = 'transient' # steady or transient
 
-n_train = 1000
-n_validation = 200
-n_test = 20
+n_train = 100
+n_validation = 20
+n_test = 2
 n_data = n_train+n_test+n_validation  
 
 # Define los índices para cada split
@@ -152,7 +152,7 @@ dataset = PCBDataset_convlstm(
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
     T_outputs_std=output_std, 
-    return_bc=False
+    return_bc=True
 )
 
 # Dataset de entrenamiento
@@ -169,7 +169,7 @@ dataset_train = PCBDataset_convlstm(
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
     T_outputs_std=output_std, 
-    return_bc=False
+    return_bc=True
 )
 
 # Dataset de validación
@@ -186,7 +186,7 @@ dataset_val = PCBDataset_convlstm(
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
     T_outputs_std=output_std, 
-    return_bc=False
+    return_bc=True
 )
 
 # Dataset de test
@@ -203,7 +203,7 @@ dataset_test = PCBDataset_convlstm(
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
     T_outputs_std=output_std, 
-    return_bc=False
+    return_bc=True
 )
 
 # path directorie for saving datasets
@@ -213,15 +213,15 @@ if not os.path.exists(path):
     
     
 
-torch.save(dataset_train, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_train.pth'))
-torch.save(dataset_test, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_test.pth'))
-torch.save(dataset_val, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_val.pth'))
-torch.save(dataset, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset.pth'))
+# torch.save(dataset_train, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_train.pth'))
+# torch.save(dataset_test, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_test.pth'))
+# torch.save(dataset_val, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_val.pth'))
+# torch.save(dataset, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset.pth'))
 
-# torch.save(dataset_train, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_train.pth'))
-# torch.save(dataset_test, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_test.pth'))
-# torch.save(dataset_val, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_val.pth'))
-# torch.save(dataset, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset.pth'))
+torch.save(dataset_train, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_train.pth'))
+torch.save(dataset_test, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_test.pth'))
+torch.save(dataset_val, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_val.pth'))
+torch.save(dataset, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset.pth'))
 
 time_end = time.time()
 print("Total time to generate and save the dataset: ", time_end - time_start)
