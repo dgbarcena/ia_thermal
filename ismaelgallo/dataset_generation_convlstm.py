@@ -20,8 +20,8 @@ from Dataset_Class_convlstm import PCBDataset_convlstm
 
 solver = 'transient' # steady or transient
 
-n_train = 100
-n_validation = 20
+n_train = 10
+n_validation = 2
 n_test = 2
 n_data = n_train+n_test+n_validation  
 
@@ -32,7 +32,7 @@ idx_test = slice(0, n_test)
 
 nodes_side = 13
 time_sim = 1000
-dt = 1
+dt = 2
 T_init = 298.0
 
 input_seq = []
@@ -152,7 +152,7 @@ dataset = PCBDataset_convlstm(
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
     T_outputs_std=output_std, 
-    return_bc=True
+    return_bc=False
 )
 
 # Dataset de entrenamiento
@@ -169,7 +169,7 @@ dataset_train = PCBDataset_convlstm(
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
     T_outputs_std=output_std, 
-    return_bc=True
+    return_bc=False
 )
 
 # Dataset de validación
@@ -186,7 +186,7 @@ dataset_val = PCBDataset_convlstm(
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
     T_outputs_std=output_std, 
-    return_bc=True
+    return_bc=False
 )
 
 # Dataset de test
@@ -203,25 +203,89 @@ dataset_test = PCBDataset_convlstm(
     T_env_std=T_env_std,
     T_outputs_mean=output_mean,
     T_outputs_std=output_std, 
+    return_bc=False
+)
+
+
+torch.save(dataset_train, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_train.pth'))
+torch.save(dataset_test, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_test.pth'))
+torch.save(dataset_val, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_val.pth'))
+torch.save(dataset, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset.pth'))
+
+# limpiar memoria
+del dataset, dataset_train, dataset_val, dataset_test
+
+dataset_phy = PCBDataset_convlstm(
+    T_interfaces=input_seq[:, :, 0, ...],      # (n_data, seq_len, 13, 13)
+    Q_heaters=input_seq[:, :, 1, ...],         # (n_data, seq_len, 13, 13)
+    T_env=input_seq[:, :, 2, ...],             # (n_data, seq_len, 13, 13)
+    T_outputs=output_seq,                      # (n_data, seq_len, 13, 13)
+    T_interfaces_mean=T_interfaces_mean,
+    T_interfaces_std=T_interfaces_std,
+    Q_heaters_mean=Q_heaters_mean,
+    Q_heaters_std=Q_heaters_std,
+    T_env_mean=T_env_mean,
+    T_env_std=T_env_std,
+    T_outputs_mean=output_mean,
+    T_outputs_std=output_std, 
     return_bc=True
 )
 
-# path directorie for saving datasets
-path = os.path.join(base_path,'datasets')
-if not os.path.exists(path):
-    os.makedirs(path)
-    
-    
+# Dataset de entrenamiento
+dataset_train_phy = PCBDataset_convlstm(
+    T_interfaces=input_seq[idx_train, :, 0, ...],
+    Q_heaters=input_seq[idx_train, :, 1, ...],
+    T_env=input_seq[idx_train, :, 2, ...],
+    T_outputs=output_seq[idx_train],
+    T_interfaces_mean=T_interfaces_mean,
+    T_interfaces_std=T_interfaces_std,
+    Q_heaters_mean=Q_heaters_mean,
+    Q_heaters_std=Q_heaters_std,
+    T_env_mean=T_env_mean,
+    T_env_std=T_env_std,
+    T_outputs_mean=output_mean,
+    T_outputs_std=output_std, 
+    return_bc=True
+)
 
-# torch.save(dataset_train, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_train.pth'))
-# torch.save(dataset_test, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_test.pth'))
-# torch.save(dataset_val, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset_val.pth'))
-# torch.save(dataset, os.path.join(path, 'PCB_convlstm_6ch_transient_dataset.pth'))
+# Dataset de validación
+dataset_val_phy = PCBDataset_convlstm(
+    T_interfaces=input_seq[idx_val, :, 0, ...],
+    Q_heaters=input_seq[idx_val, :, 1, ...],
+    T_env=input_seq[idx_val, :, 2, ...],
+    T_outputs=output_seq[idx_val],
+    T_interfaces_mean=T_interfaces_mean,
+    T_interfaces_std=T_interfaces_std,
+    Q_heaters_mean=Q_heaters_mean,
+    Q_heaters_std=Q_heaters_std,
+    T_env_mean=T_env_mean,
+    T_env_std=T_env_std,
+    T_outputs_mean=output_mean,
+    T_outputs_std=output_std, 
+    return_bc=True
+)
 
-torch.save(dataset_train, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_train.pth'))
-torch.save(dataset_test, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_test.pth'))
-torch.save(dataset_val, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_val.pth'))
-torch.save(dataset, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset.pth'))
+# Dataset de test
+dataset_test_phy = PCBDataset_convlstm(
+    T_interfaces=input_seq[idx_test, :, 0, ...],
+    Q_heaters=input_seq[idx_test, :, 1, ...],
+    T_env=input_seq[idx_test, :, 2, ...],
+    T_outputs=output_seq[idx_test],
+    T_interfaces_mean=T_interfaces_mean,
+    T_interfaces_std=T_interfaces_std,
+    Q_heaters_mean=Q_heaters_mean,
+    Q_heaters_std=Q_heaters_std,
+    T_env_mean=T_env_mean,
+    T_env_std=T_env_std,
+    T_outputs_mean=output_mean,
+    T_outputs_std=output_std, 
+    return_bc=True
+)
+
+torch.save(dataset_train_phy, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_train.pth'))
+torch.save(dataset_test_phy, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_test.pth'))
+torch.save(dataset_val_phy, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset_val.pth'))
+torch.save(dataset_phy, os.path.join(path, 'PCB_convlstm_phy_6ch_transient_dataset.pth'))
 
 time_end = time.time()
 print("Total time to generate and save the dataset: ", time_end - time_start)

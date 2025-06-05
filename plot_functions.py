@@ -1027,7 +1027,7 @@ def plot_mae_per_pixel_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None,
     
     
 #%%
-def plot_mae_per_frame(y_true, y_pred, dataset=None, save_as_pdf=False, filename='mae_per_frame', yscale='log'):
+def plot_mae_per_frame(y_true, y_pred, dataset=None, dt = 1, save_as_pdf=False, filename='mae_per_frame', yscale='log'):
     """
     Calcula y grafica el error absoluto medio (MAE) por paso temporal en escala original 
     para una muestra del dataloader. Compatible con modelos que usan (x, y) o (x, t, y).
@@ -1035,6 +1035,7 @@ def plot_mae_per_frame(y_true, y_pred, dataset=None, save_as_pdf=False, filename
     Parámetros:
         y_true: array o tensor (T, H, W) – ground truth
         y_pred: array o tensor (T, H, W) – predicción del modelo
+        dt: float – paso temporal entre frames (en segundos)
         dataset: objeto dataset para desnormalizar (opcional)
         save_as_pdf: bool – si es True, guarda la figura como PDF en 'figures'
         filename: string – nombre base del archivo (sin extensión)
@@ -1054,9 +1055,11 @@ def plot_mae_per_frame(y_true, y_pred, dataset=None, save_as_pdf=False, filename
 
     # MAE por paso temporal
     mae_per_t = np.mean(np.abs(y_true - y_pred), axis=(1, 2))  # (T,)
+    # Convertir a escala de tiempoç
+    steps = np.arange(len(mae_per_t)) * dt  # (T,)
 
     plt.figure(figsize=(8, 4))
-    plt.plot(mae_per_t, marker='o')
+    plt.plot(steps, mae_per_t, marker='o')
     plt.title("Error absoluto medio por paso temporal (desnormalizado)")
     plt.xlabel("Paso temporal t")
     plt.ylabel("MAE [K]" if dataset is not None else "MAE")
@@ -1066,7 +1069,7 @@ def plot_mae_per_frame(y_true, y_pred, dataset=None, save_as_pdf=False, filename
         plt.yscale('linear')
     else:
         raise ValueError("y_scale debe ser 'log' o 'linear'")
-    plt.xlim(0, len(mae_per_t) - 1)
+    plt.xlim(0, steps[-1])
     plt.grid(True)
     plt.tight_layout()
     if save_as_pdf:
@@ -1076,7 +1079,7 @@ def plot_mae_per_frame(y_true, y_pred, dataset=None, save_as_pdf=False, filename
 
 
 #%%
-def plot_mae_per_frame_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None, 
+def plot_mae_per_frame_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None, dt= 1, 
                             labels=("Sin física", "Con física"),
                             save_as_pdf=False, filename='mae_per_frame_2way', yscale='log'):
     """
@@ -1089,6 +1092,7 @@ def plot_mae_per_frame_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None,
         y_pred_nofis: array o tensor (T, H, W) – predicción modelo sin física
         y_pred_fis: array o tensor (T, H, W) – predicción modelo con física
         dataset: objeto dataset para desnormalizar (opcional)
+        dt: float – paso temporal entre frames (en segundos)
         labels: tupla de strings – etiquetas para las curvas
         save_as_pdf: bool – si es True, guarda la figura como PDF en 'figures'
         filename: string – nombre base del archivo (sin extensión)
@@ -1113,8 +1117,9 @@ def plot_mae_per_frame_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None,
     # MAE por paso temporal
     mae_nofis = np.mean(np.abs(y_true - y_pred_nofis), axis=(1, 2))  # (T,)
     mae_fis = np.mean(np.abs(y_true - y_pred_fis), axis=(1, 2))      # (T,)
+    # Convertir a escala de tiempo
+    steps = np.arange(len(mae_nofis)) * dt  # (T,)
 
-    steps = np.arange(len(mae_nofis))
     plt.figure(figsize=(8, 4))
     plt.plot(steps, mae_nofis, marker='o', label=labels[0])
     plt.plot(steps, mae_fis, marker='s', label=labels[1])
