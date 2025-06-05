@@ -9,10 +9,8 @@ from torch_geometric.utils import to_dense_batch
 from torch_scatter import scatter_mean
 
 
-def train(model, loader, optimizer, device, norm_info,
-          use_physics=False, lambda_physics=0.003,
-          use_boundary_loss=True, lambda_boundary=0.01,
-          use_heater_loss=True, lambda_heater=0.01):
+def train(model, loader, optimizer, device, norm_info, use_physics=False, lambda_physics=0.003,
+          use_boundary_loss=True, lambda_boundary=0.01, use_heater_loss=True, lambda_heater=0.01):
 
     model.train()
     total_loss = torch.tensor(0.0, device=device)
@@ -34,19 +32,19 @@ def train(model, loader, optimizer, device, norm_info,
             Q_heaters_norm=batch.x[:, 2],
             T_env_norm=batch.x[:, 1],
             norm_info=norm_info
-        ).detach() if use_physics else torch.tensor(0.0, device=device)
+        ) if use_physics else torch.tensor(0.0, device=device)
 
         loss_boundary = compute_boundary_loss(
             pred_T_norm=out,
             true_T_norm=batch.y.view(-1),
             mask_fixed=batch.mask_fixed_temp.view(-1)
-        ).detach() if use_boundary_loss else torch.tensor(0.0, device=device)
+        ) if use_boundary_loss else torch.tensor(0.0, device=device)
 
         loss_heater = compute_heater_loss(
             pred_T_norm=out,
             true_T_norm=batch.y.view(-1),
             Q_heaters_norm=batch.x[:, 2]
-        ).detach() if use_heater_loss else torch.tensor(0.0, device=device)
+        ) if use_heater_loss else torch.tensor(0.0, device=device)
 
         loss = loss_data + lambda_physics * loss_physics + lambda_boundary * loss_boundary + lambda_heater * loss_heater
         loss.backward()
@@ -73,7 +71,7 @@ def evaluate(model, loader, device, norm_info, error_threshold,
     with torch.no_grad():
         for data in loader:
             data = data.to(device)
-            out = model(data.x, data.edge_index, data.edge_attr).view(-1).detach()
+            out = model(data.x, data.edge_index, data.edge_attr).view(-1)
             true_vals = data.y.view(-1)
             pred_vals = out.clone()
 
