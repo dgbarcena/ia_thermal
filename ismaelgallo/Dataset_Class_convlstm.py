@@ -207,19 +207,19 @@ class PCBDataset_convlstm(Dataset):
 
         # Stack y replicar en el tiempo
         if autorregress:
-            print('Calculando input tensor para predicción, solo el primer paso de la secuencia')
+            # print('Calculando input tensor para predicción, solo el primer paso de la secuencia')
             input_bc = torch.stack([T_map, Q_map, T_env_map, mask_interfaces_map, mask_heaters_map], dim=0)
             input_tensor = torch.zeros((1, 1, 6, nodes_side, nodes_side), dtype=torch.float32) # se añade una dimensión de tiempo
             input_tensor[:, :, 0:5, :, :] = input_bc[0:5, :, :]
             input_tensor[:, :, 5, :, :] = T_seq_norm[0, :, :]
-            print(f"Input tensor shape: {input_tensor.shape}")
+            # print(f"Input tensor shape: {input_tensor.shape}")
         else:
-            print('Calculando input tensor para entrenamiento, toda la secuencia con datos del solver')
+            # print('Calculando input tensor para entrenamiento, toda la secuencia con datos del solver')
             input_bc = torch.stack([T_map, Q_map, T_env_map, mask_interfaces_map, mask_heaters_map], dim=0)  # (, 13, 13)
             input_tensor = torch.zeros((1, sequence_length, 6, nodes_side, nodes_side), dtype=torch.float32)
             input_tensor[:, :, 0:5, :, :] = input_bc[0:5, :, :] 
             input_tensor[:, :, 5, :, :] = T_seq_norm  # (T, 13, 13)
-            print(f"Input tensor shape: {input_tensor.shape}")  # (1, T, 4, 13, 13)
+            # print(f"Input tensor shape: {input_tensor.shape}")  # (1, T, 4, 13, 13)
 
         return input_tensor.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
 

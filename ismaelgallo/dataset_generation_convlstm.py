@@ -49,9 +49,9 @@ from PCB_solver_tr import PCB_case_2
 from Dataset_Class_convlstm import PCBDataset_convlstm
 
 # Parámetros de configuración
-n_train = 1000
-n_validation = 200
-n_test = 20
+n_train = 2500
+n_validation = 500
+n_test = 50
 n_data = n_train + n_test + n_validation
 
 # Define los índices para cada split

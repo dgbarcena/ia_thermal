@@ -628,9 +628,9 @@ def downsample_solver_output(T_solver, step_interval):
     max_steps = T_solver.shape[0]  # seq_len
     indices = list(range(0, max_steps, step_interval))
     
-    print(f"Solver output original: {max_steps} pasos")
-    print(f"Solver output recortado: {len(indices)} pasos (cada {step_interval} pasos)")
-    print(f"Índices seleccionados: {indices[:10]}{'...' if len(indices) > 10 else ''}")
+    # print(f"Solver output original: {max_steps} pasos")
+    # print(f"Solver output recortado: {len(indices)} pasos (cada {step_interval} pasos)")
+    # print(f"Índices seleccionados: {indices[:10]}{'...' if len(indices) > 10 else ''}")
     
     # Recortar usando los índices
     T_solver_downsampled = T_solver[indices, ...]
