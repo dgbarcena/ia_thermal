@@ -60,13 +60,13 @@ idx_val = slice(n_test + n_train, n_test + n_train + n_validation)
 idx_test = slice(0, n_test)
 
 nodes_side = 13
-time_sim = 1000
+time_sim = 650
 dt = 1
 T_init = 298.0
 
 # =============== CONFIGURACIÓN DE ITERACIONES ===============
 # step_intervals = list(range(1, 11))  # Lista de step_intervals a procesar
-step_intervals = [5, 10, 20, 50, 100]
+step_intervals = [1, 2, 5, 10, 20, 50, 100]
 return_bc_options = [True, False]  # Lista de opciones para return_bc (NO TOCAR)
 
 print(f"🚀 Generando datasets para:")
