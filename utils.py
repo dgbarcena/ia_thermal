@@ -610,3 +610,29 @@ def predict_from_conditions(Q_heaters: np.ndarray,
     preds_denorm = preds_norm * std + mean      # (1, T, 1, H, W)
     preds_denorm = preds_denorm.squeeze(0).squeeze(1)  # (T, 13,13)
     return preds_denorm.cpu().numpy()
+
+
+#%%
+def downsample_solver_output(T_solver, step_interval):
+    """
+    Recorta la salida del solver tomando muestras cada 'step_interval' pasos.
+    
+    Args:
+        T_solver: numpy array (seq_len, H, W) - salida directa del solver
+        step_interval: int, intervalo de pasos (ej: 10 para tomar pasos 0, 10, 20, ...)
+    
+    Returns:
+        T_solver_downsampled: numpy array recortado
+    """
+    # Generar índices: 0, step_interval, 2*step_interval, ...
+    max_steps = T_solver.shape[0]  # seq_len
+    indices = list(range(0, max_steps, step_interval))
+    
+    print(f"Solver output original: {max_steps} pasos")
+    print(f"Solver output recortado: {len(indices)} pasos (cada {step_interval} pasos)")
+    print(f"Índices seleccionados: {indices[:10]}{'...' if len(indices) > 10 else ''}")
+    
+    # Recortar usando los índices
+    T_solver_downsampled = T_solver[indices, ...]
+    
+    return T_solver_downsampled

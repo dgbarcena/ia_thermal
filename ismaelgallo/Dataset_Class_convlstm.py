@@ -4,7 +4,7 @@ import os
 
 #%%
 
-def load_dataset_convlstm(base_path='.', folder='datasets', dataset_type=None, solver='transient', physic=False):   
+def load_dataset_convlstm(base_path='.', folder='datasets', dt = 1, dataset_type=None, physic=False):   
     """
     Carga un dataset .pth desde una carpeta, por defecto el dataset base completo.
     
@@ -12,33 +12,33 @@ def load_dataset_convlstm(base_path='.', folder='datasets', dataset_type=None, s
     - base_path: ruta base (por defecto, carpeta actual)
     - folder: subcarpeta donde están los archivos (por defecto, 'datasets')
     - dataset_type: 'train', 'test', 'val' o None (por defecto carga el dataset base completo)
-    - solver: 'transient' o 'steady' (por defecto 'transient')
     - physic: si True, carga el dataset con condiciones de contorno físicas (por defecto False)
+    - dt: paso de tiempo del solver (por defecto 1)
     """
     
     if physic:
         if dataset_type is None:
-            filename = f'PCB_convlstm_phy_6ch_{solver}_dataset.pth'
+            filename = f'PCB_convlstm_dt{dt}_phy_6ch_dataset.pth'
         else:
             valid_types = ['train', 'test', 'val']
             if dataset_type not in valid_types:
                 raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None para el dataset base.")
-            filename = f"PCB_convlstm_phy_6ch_{solver}_dataset_{dataset_type}.pth"
+            filename = f"PCB_convlstm_dt{dt}_phy_6ch_dataset_{dataset_type}.pth"
     else:
         if dataset_type is None:
-            filename = f'PCB_convlstm_6ch_{solver}_dataset.pth'
+            filename = f'PCB_convlstm_dt{dt}_6ch_dataset.pth'
         else:
             valid_types = ['train', 'test', 'val']
             if dataset_type not in valid_types:
                 raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None para el dataset base.")
-            filename = f"PCB_convlstm_6ch_{solver}_dataset_{dataset_type}.pth"
+            filename = f"PCB_convlstm_dt{dt}_6ch_dataset_{dataset_type}.pth"
 
     full_path = os.path.join(base_path, folder, filename)
 
     if not os.path.exists(full_path):
         raise FileNotFoundError(f"❌ No se encontró el archivo: {full_path}")
 
-    print(f"✅ Cargando ConvLSTM {solver} dataset {'base' if dataset_type is None else dataset_type} desde: {full_path}")
+    # print(f"✅ Cargando ConvLSTM dataset {'base' if dataset_type is None else dataset_type} desde: {full_path}")
     return torch.load(full_path)
 
 
@@ -312,8 +312,7 @@ class PCBDataset_convlstm(Dataset):
 # -----------------------------------------------------------------------------
 class TrimmedDataset_convlstm(Dataset):
     def __init__(self, base_dataset: Dataset, max_samples: int = None,
-                 time_steps_input: int = None, time_steps_output: int = None,
-                 solver: str = 'transient'):
+                 time_steps_input: int = None, time_steps_output: int = None):
         """
         Dataset recortado para datos estacionarios o transitorios.
 
@@ -322,14 +321,11 @@ class TrimmedDataset_convlstm(Dataset):
             max_samples (int): número máximo de muestras a devolver
             time_steps_input (int): número de pasos temporales de entrada (solo si solver='transient')
             time_steps_output (int): número de pasos temporales de salida (solo si solver='transient')
-            solver (str): 'steady' o 'transient'
         """
         self.base_dataset = base_dataset
         self.max_samples = max_samples or len(base_dataset)
         self.time_steps_input = time_steps_input
         self.time_steps_output = time_steps_output
-        assert solver in ['steady', 'transient'], "solver must be 'steady' or 'transient'"
-        self.solver = solver
 
     def __len__(self):
         return min(self.max_samples, len(self.base_dataset))
@@ -349,11 +345,10 @@ class TrimmedDataset_convlstm(Dataset):
             input_data, output_data = data
             bcs = []
     
-        if self.solver == 'transient':
-            # Recortar la dimensión temporal (primer eje) tanto en input como en output
-            if self.time_steps_output is not None and output_data.shape[0] > self.time_steps_output:
-                input_data = input_data[:self.time_steps_output]
-                output_data = output_data[:self.time_steps_output]
+        # Recortar la dimensión temporal (primer eje) tanto en input como en output
+        if self.time_steps_output is not None and output_data.shape[0] > self.time_steps_output:
+            input_data = input_data[:self.time_steps_output]
+            output_data = output_data[:self.time_steps_output]
             
         # Asegurar que el output tenga una dimensión de canal
         if output_data.ndim == 2:
@@ -369,7 +364,7 @@ class TrimmedDataset_convlstm(Dataset):
 # -----------------------------------------------------------------------------
 def load_trimmed_dataset_convlstm(base_path='.', folder='datasets', dataset_type=None,
                          max_samples=None, time_steps_input=None, time_steps_output=None,
-                         to_device=False, solver='transient', physic=False):
+                         to_device=False, physic=False, dt = 1):
     """
     Carga un dataset base y lo encapsula en un TrimmedDataset, compatible con casos transitorios y estacionarios.
 
@@ -381,28 +376,28 @@ def load_trimmed_dataset_convlstm(base_path='.', folder='datasets', dataset_type
         time_steps_input (int): número de pasos temporales de entrada (si es transitorio)
         time_steps_output (int): número de pasos temporales de salida (si es transitorio)
         to_device (bool): si se debe mover a CUDA (si está disponible)
-        solver (str): 'transient' o 'steady'
         physic (bool): si True, devuelve un dataset con condiciones de contorno físicas
+        dt (int): paso de tiempo del solver (por defecto 1)
 
     Returns:
         TrimmedDataset
     """
     if physic:
         if dataset_type is None:
-            filename = f'PCB_convlstm_phy_6ch_{solver}_dataset.pth'
+            filename = f'PCB_convlstm_dt{dt}_phy_6ch_dataset.pth'
         else:
             valid_types = ['train', 'test', 'val']
             if dataset_type not in valid_types:
                 raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None.")
-            filename = f"PCB_convlstm_phy_6ch_{solver}_dataset_{dataset_type}.pth"
+            filename = f"PCB_convlstm_dt{dt}_phy_6ch_dataset_{dataset_type}.pth"
     else:
         if dataset_type is None:
-            filename = f'PCB_convlstm_6ch_{solver}_dataset.pth'
+            filename = f'PCB_convlstm_dt{dt}_6ch_dataset.pth'
         else:
             valid_types = ['train', 'test', 'val']
             if dataset_type not in valid_types:
                 raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None.")
-            filename = f"PCB_convlstm_6ch_{solver}_dataset_{dataset_type}.pth"
+            filename = f"PCB_convlstm_dt{dt}_6ch_dataset_{dataset_type}.pth"
 
     full_path = os.path.join(base_path, folder, filename)
 
@@ -419,8 +414,7 @@ def load_trimmed_dataset_convlstm(base_path='.', folder='datasets', dataset_type
     return TrimmedDataset_convlstm(base_dataset,
                           max_samples=max_samples,
                           time_steps_input=time_steps_input,
-                          time_steps_output=time_steps_output,
-                          solver=solver)
+                          time_steps_output=time_steps_output)
 
 
 # -----------------------------------------------------------------------------
