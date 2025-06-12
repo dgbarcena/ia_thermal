@@ -95,7 +95,7 @@ def PCB_case_2(solver: str = 'steady', L:float=0.1,thickness:float=0.001,m:int=3
 #####################################################################################################
 
 def PCB_solver_main(solver:str, Lx:float,Ly:float,thickness:float,nx:int,ny:int,board_k:float,  ir_emmisivity:float,
-                    Tenv:float,interfaces:dict,heaters:dict, display:bool = False, maxiters:int = 1000, objtol:int = 0.01, board_c:float=900, board_rho: float = 2700, time:float = 0.0, dt:float = 0.0,T_init:float = 298.0):
+                    Tenv:float,interfaces:dict,heaters:dict, display:bool = False, maxiters:int = 1000, objtol:int = 0.01, board_c:float=900, board_rho: float = 2700, time:float = 0.0, dt:float = 0.0,T_init = 298.0):
     '''
     Función solver del problema de PCB rectangular en un entorno radiativo formado por un cuerpo negro a temperatura Tenv. 
     Los nodos van numerados siguiendo el esquema de la figura, los nodos se ordenan de forma creciente filas.
@@ -205,7 +205,13 @@ def PCB_solver_main(solver:str, Lx:float,Ly:float,thickness:float,nx:int,ny:int,
     it = 0
 
     if solver == 'steady':
-        T = np.full(n_nodes, T_init, dtype=np.double)
+        if isinstance(T_init, float) == True:
+            T = np.full(n_nodes, T_init, dtype=np.double)
+        elif isinstance(T_init, np.ndarray) == True: 
+            T = T_init.copy()
+        else:
+            print("T_init must be a float or a numpy array.")
+            exit(1)
         while tol > objtol and it < maxiters:
             b = Q - K.__matmul__(T) - Boltzmann_cte * E.__matmul__(T**4-Tenv**4)
             A = K + 4 * Boltzmann_cte * E.multiply(T**3)
@@ -232,7 +238,13 @@ def PCB_solver_main(solver:str, Lx:float,Ly:float,thickness:float,nx:int,ny:int,
         if alpha*dt/(0.5*(dx+dy))**2 > 0.5: # stability criterion for Euler scheeme. --> the criterion can be found here (eq 11): https://en.wikipedia.org/wiki/Von_Neumann_stability_analysis
             print("Excesive timestep size. Euler method becomes unstable.")
             exit(1)
-        T = np.full(n_nodes, T_init, dtype=np.double) 
+        if isinstance(T_init, float) == True:
+            T = np.full(n_nodes, T_init, dtype=np.double)
+        elif isinstance(T_init, np.ndarray) == True: 
+            T = T_init.copy()
+        else:
+            print("T_init must be a float or a numpy array.")
+            exit(1)
         interface_nodes_id = np.array(list(interfaces.keys()))
         heater_nodes_id = np.array(list(heaters.keys()))
         
@@ -276,6 +288,7 @@ def PCB_solver_main(solver:str, Lx:float,Ly:float,thickness:float,nx:int,ny:int,
 ######################################################################################## 
 ################# EJEMPLO DE USO CON LOS VALORES PREDETERMINADOS #######################
 ######################################################################################## 
+T_init_random = np.random.uniform(70, 320, 169)
 # T1,time1,interfaces1,heaters1 = PCB_case_2(solver='steady',display=True)
-# T2, time2, interfaces2, heaters2 = PCB_case_2(solver = 'transient', display=True, time = 1000, dt = 2, T_init = 298.0)
+T2, time2, interfaces2, heaters2 = PCB_case_2(solver = 'transient', display=True, time = 1000, dt = 1, T_init = T_init_random)
 # %%
