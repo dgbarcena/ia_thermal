@@ -21,14 +21,14 @@ from PCB_solver_tr import PCB_case_2
 
 solver = 'transient' # steady or transient
 
-n_train = 1500
-n_validation = 300
+n_train = 1000
+n_validation = 200
 n_test = 50
 n_cases = n_train+n_test+n_validation  
 
 
 nodes_side = 13
-time_sim = 1000
+time_sim = 650
 seq_len = time_sim+1
 dt = 1
 T_init = 298.0

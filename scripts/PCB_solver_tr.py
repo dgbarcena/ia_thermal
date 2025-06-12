@@ -288,7 +288,7 @@ def PCB_solver_main(solver:str, Lx:float,Ly:float,thickness:float,nx:int,ny:int,
 ######################################################################################## 
 ################# EJEMPLO DE USO CON LOS VALORES PREDETERMINADOS #######################
 ######################################################################################## 
-T_init_random = np.random.uniform(70, 320, 169)
+# T_init_random = np.random.uniform(70, 320, 169)
 # T1,time1,interfaces1,heaters1 = PCB_case_2(solver='steady',display=True)
-T2, time2, interfaces2, heaters2 = PCB_case_2(solver = 'transient', display=True, time = 1000, dt = 1, T_init = T_init_random)
+# T2, time2, interfaces2, heaters2 = PCB_case_2(solver = 'transient', display=True, time = 1000, dt = 1, T_init = T_init_random)
 # %%

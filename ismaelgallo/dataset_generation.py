@@ -18,15 +18,15 @@ if cnn_path not in sys.path:
 from PCB_solver_tr import PCB_case_2
 from Dataset_Class import PCBDataset
 
-solver = 'steady' # steady or transient
+solver = 'transient' # steady or transient
 
-n_train = 100000
-n_validation = 20000
-n_test = 10000
+n_train = 1000
+n_validation = 200
+n_test = 50
 n_data = n_train+n_test+n_validation  
 
 nodes_side = 13
-time_sim = 1000
+time_sim = 500
 dt = 1
 T_init = 298.0
 
@@ -35,9 +35,9 @@ output = []
 
 np.random.seed(0)
 
-Q_random = np.random.uniform(0.5, 1.0, (n_data, 4))
-T_interfaces_random = np.random.uniform(280, 310, (n_data, 4))
-T_env_random = np.random.uniform(280, 310, n_data)
+Q_random = np.random.uniform(0.5, 1.5, (n_data, 4))
+T_interfaces_random = np.random.uniform(270, 320, (n_data, 4))
+T_env_random = np.random.uniform(270, 320, n_data)
 
 time_start = time.time()
 
@@ -126,17 +126,17 @@ path = os.path.join(base_path,'datasets')
 if not os.path.exists(path):
     os.makedirs(path)
     
-# torch.save(dataset_train, os.path.join(path, 'PCB_transient_dataset_train.pth'))
-# torch.save(dataset_test, os.path.join(path, 'PCB_transient_dataset_test.pth'))
-# torch.save(dataset_val, os.path.join(path, 'PCB_transient_dataset_val.pth'))
-# torch.save(dataset, os.path.join(path, 'PCB_transient_dataset.pth'))
+torch.save(dataset_train, os.path.join(path, 'PCB_transient_dataset_train.pth'))
+torch.save(dataset_test, os.path.join(path, 'PCB_transient_dataset_test.pth'))
+torch.save(dataset_val, os.path.join(path, 'PCB_transient_dataset_val.pth'))
+torch.save(dataset, os.path.join(path, 'PCB_transient_dataset.pth'))
 
 # torch.save(dataset_train, os.path.join(path, 'PCB_transient_dataset_train_reducedrange.pth'))
 # torch.save(dataset_test, os.path.join(path, 'PCB_transient_dataset_test_reducedrange.pth'))
 # torch.save(dataset_val, os.path.join(path, 'PCB_transient_dataset_val_reducedrange.pth'))
 # torch.save(dataset, os.path.join(path, 'PCB_transient_dataset_reducedrange.pth'))
 
-torch.save(dataset_train, os.path.join(path, 'PCB_steady_dataset_train.pth'))
-torch.save(dataset_test, os.path.join(path, 'PCB_steady_dataset_test.pth'))
-torch.save(dataset_val, os.path.join(path, 'PCB_steady_dataset_val.pth'))
-torch.save(dataset, os.path.join(path, 'PCB_steady_dataset.pth'))
+# torch.save(dataset_train, os.path.join(path, 'PCB_steady_dataset_train.pth'))
+# torch.save(dataset_test, os.path.join(path, 'PCB_steady_dataset_test.pth'))
+# torch.save(dataset_val, os.path.join(path, 'PCB_steady_dataset_val.pth'))
+# torch.save(dataset, os.path.join(path, 'PCB_steady_dataset.pth'))
