@@ -26,7 +26,7 @@ n_test = 50
 n_data = n_train+n_test+n_validation  
 
 nodes_side = 13
-time_sim = 500
+time_sim = 650
 dt = 1
 T_init = 298.0
 
