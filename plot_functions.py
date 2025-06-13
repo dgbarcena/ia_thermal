@@ -1387,3 +1387,75 @@ def plot_accuracy_metrics_summary(T_true, T_pred_list, model_names, umbrales=[1,
         for percentage in percentages:
             print(f"{percentage:>10.1f}%", end="  ")
         print()
+        
+        
+        
+#%%
+
+def plot_6_canales_mapas(data, save_as_pdf=False, filename='6_canales_mapas', save_individual=False):
+    """
+    Plotea 6 canales como mapas de calor 13x13 sin labels ni colorbar
+    
+    Parameters:
+        data: tensor de forma (6, 13, 13) o (1, 6, 13, 13) o (13, 13, 6)
+        save_as_pdf: if True, saves the figure as PDF in the 'figures' folder
+        filename: base filename (without extension)
+        save_individual: if True, saves each map separately
+    """
+    # Convertir tensor a numpy y manejar diferentes formas
+    if torch.is_tensor(data):
+        data = data.detach().cpu().numpy()
+    
+    # Manejar diferentes formas del tensor
+    if data.ndim == 4:  # (batch, channels, height, width)
+        data = data[0]  # Tomar el primer elemento del batch
+    elif data.ndim == 3 and data.shape[-1] == 6:  # (height, width, channels)
+        data = np.transpose(data, (2, 0, 1))  # Convertir a (channels, height, width)
+    
+    # =============== FIGURE CONFIGURATION WITH WHITE BACKGROUND ===============
+    fig, axes = plt.subplots(2, 3)
+    fig.patch.set_facecolor('white')
+    
+    # Title only for visualization (will be removed when saving PDF)
+    title_handle = fig.suptitle('6 Canales de Entrada - Mapas 13x13', color='black')
+    
+    axes = axes.flatten()
+    
+    for i in range(6):
+        axes[i].set_facecolor('white')
+        axes[i].imshow(data[i], cmap='viridis', interpolation='nearest')
+        
+        # Quitar labels y ticks de los ejes
+        axes[i].set_xticks([])
+        axes[i].set_yticks([])
+        axes[i].tick_params(colors='black')
+    
+    plt.tight_layout()
+    
+    if save_as_pdf:
+        # Remove title before saving
+        title_handle.set_visible(False)
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf', facecolor='white', bbox_inches='tight')
+        # Restore title for visualization
+        title_handle.set_visible(True)
+    
+    plt.show()
+    
+    # Guardar mapas individuales si se solicita
+    if save_individual and save_as_pdf:
+        for i in range(6):
+            # =============== INDIVIDUAL FIGURE CONFIGURATION ===============
+            fig_individual = plt.figure()
+            fig_individual.patch.set_facecolor('white')
+            ax = plt.gca()
+            ax.set_facecolor('white')
+            
+            plt.imshow(data[i], cmap='viridis', interpolation='nearest')
+            plt.axis('off')
+            
+            individual_path = f"figures/{filename}_canal_{i+1}.pdf"
+            plt.savefig(individual_path, format='pdf', facecolor='white', bbox_inches='tight')
+            plt.close()
+            
+        print(f"Mapas individuales guardados en: figures/")
