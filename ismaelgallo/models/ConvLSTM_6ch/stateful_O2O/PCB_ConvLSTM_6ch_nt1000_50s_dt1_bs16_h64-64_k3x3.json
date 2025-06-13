@@ -1,0 +1,58 @@
+{
+    "start_datetime": "2025-06-13 11:58:53",
+    "training_duration_minutes": 6.535298951466879,
+    "model_parameters": 456769,
+    "system_specs": null,
+    "simulation_time": 50,
+    "dt": 1,
+    "n_train": 1000,
+    "n_val": 200,
+    "n_test": 20,
+    "input_channels": 6,
+    "sequence_length": 51,
+    "epochs": 1000,
+    "hidden_dims": [
+        64,
+        64
+    ],
+    "kernel_size": [
+        3,
+        3
+    ],
+    "scheduled_sampling": {
+        "p0": 1.0,
+        "p_min": 0.0,
+        "decay_epochs": 200
+    },
+    "batch_size": 16,
+    "lr": 0.01,
+    "scheduler": {
+        "type": "ReduceLROnPlateau",
+        "factor": 0.1,
+        "patience": 10,
+        "final_lr": 0.01
+    },
+    "early_stop_patience": 50,
+    "epochs_trained": 8,
+    "best_val_loss": 0.0011857533066246945,
+    "train_loss": [
+        0.2461115290662126,
+        0.010473031498905685,
+        0.0031839931708952736,
+        0.0025392763579027756,
+        0.0008205903466746566,
+        0.2377762425642845,
+        0.0023659898433834314,
+        0.26417273245770334
+    ],
+    "val_loss": [
+        0.035627989671551265,
+        0.01726526852983695,
+        0.008732489847506467,
+        0.0028727799116705474,
+        0.0011857533066246945,
+        0.010553339066413732,
+        0.0137741444632411,
+        0.010630062709634121
+    ]
+}
