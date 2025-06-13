@@ -5,6 +5,7 @@ import matplotlib.animation as animation
 from matplotlib.patches import Rectangle
 from matplotlib.animation import PillowWriter
 import os
+from utils import *
 
 #%%
 
@@ -235,21 +236,24 @@ def plot_se_map(y_pred, y_true, time=0, dt=1, show_pred=True, return_mse=False):
 #%% 
 def plot_nodes_evolution(y_pred, y_true, nodes_idx, dt=1, together=True, save_as_pdf=False, filename='nodes_evolution'):
     """
-    Muestra la evolución temporal de las temperaturas reales y predichas en una serie de nodos.
+    Shows the temporal evolution of real and predicted temperatures in a series of nodes.
     
-    Parámetros:
-        y_pred: array con shape (T, H, W)
-        y_true: array con shape (T, H, W)
-        nodes_idx: lista de índices de los nodos a mostrar [(idx1, idy1), (idx2, idy2), ...]
-        dt: intervalo de tiempo entre cada paso de tiempo
-        together: si es True, muestra todas las evoluciones en un solo gráfico
-        save_as_pdf: si es True, guarda la figura como PDF en la carpeta 'figures'
-        filename: nombre base del archivo (sin extensión)
+    Parameters:
+        y_pred: array with shape (T, H, W)
+        y_true: array with shape (T, H, W)
+        nodes_idx: list of node indices to show [(idx1, idy1), (idx2, idy2), ...]
+        dt: time interval between each time step
+        together: if True, shows all evolutions in a single plot
+        save_as_pdf: if True, saves the figure as PDF in the 'figures' folder
+        filename: base filename (without extension)
     """
     time = np.arange(y_pred.shape[0]) * dt
 
     if together:
-        plt.figure(figsize=(12, 6))
+        # =============== FIGURE CONFIGURATION WITH WHITE BACKGROUND ===============
+        fig, ax = plt.subplots(figsize=(12, 6))
+        fig.patch.set_facecolor('white')
+        ax.set_facecolor('white')
         
         for i, node_idx in enumerate(nodes_idx):
             color = plt.cm.tab10(i % 10)
@@ -258,47 +262,74 @@ def plot_nodes_evolution(y_pred, y_true, nodes_idx, dt=1, together=True, save_as
             y_true_node = y_true[:, node_idx[0], node_idx[1]]
             y_pred_node = y_pred[:, node_idx[0], node_idx[1]]
 
-            plt.plot(time, y_true_node, label=f'{label} - Ground Truth', color=color)
-            plt.plot(time, y_pred_node, 'x', label=f'{label} - Prediction', color=color)
+            ax.plot(time, y_true_node, label=f'{label} - Ground Truth', color=color, linewidth=2)
+            ax.plot(time, y_pred_node, 'x', label=f'{label} - Prediction', color=color, markersize=4)
         
-        plt.xlabel('Time [s]')
-        plt.ylabel('Temperature [K]')
-        plt.title('Time evolution of temperature in selected nodes')
-        plt.xlim(time[0], time[-1])
-        plt.legend()
-        plt.grid(True)
+        ax.set_xlabel('Time [s]', color='black')
+        ax.set_ylabel('Temperature [K]', color='black')
+        
+        # Título solo para visualización (se eliminará al guardar PDF)
+        title_handle = ax.set_title('Time evolution of temperature in selected nodes', color='black')
+        
+        # Limitar eje x a los pasos representados
+        ax.set_xlim(time[0], time[-1])
+        
+        # Configurar cuadrícula
+        ax.grid(True, alpha=0.3, color='gray', linestyle='-', linewidth=0.5)
+        
+        ax.legend()
+        ax.tick_params(colors='black')
         plt.tight_layout()
 
         if save_as_pdf:
+            # Eliminar título antes de guardar
+            title_handle.set_visible(False)
             os.makedirs('figures', exist_ok=True)
-            plt.savefig(f'figures/{filename}.pdf', format='pdf')
+            plt.savefig(f'figures/{filename}.pdf', format='pdf', facecolor='white')
+            # Restaurar título para visualización
+            title_handle.set_visible(True)
         plt.show()
 
     else:
+        # =============== MULTIPLE SUBPLOTS CONFIGURATION ===============
         fig, axs = plt.subplots(len(nodes_idx), 1, figsize=(12, 3 * len(nodes_idx)), sharex=True)
+        fig.patch.set_facecolor('white')
+        
         if len(nodes_idx) == 1:
             axs = [axs]
 
         for i, node_idx in enumerate(nodes_idx):
-            axs[i].plot(time, y_true[:, node_idx[0], node_idx[1]], label='Ground truth', color='blue')
-            axs[i].plot(time, y_pred[:, node_idx[0], node_idx[1]], 'x', label='Prediction', color='orange')
-            axs[i].set_title(f"Node ({node_idx[0]}, {node_idx[1]})")
+            axs[i].set_facecolor('white')
+            axs[i].plot(time, y_true[:, node_idx[0], node_idx[1]], label='Ground truth', color='blue', linewidth=2)
+            axs[i].plot(time, y_pred[:, node_idx[0], node_idx[1]], 'x', label='Prediction', color='orange', markersize=4)
+            axs[i].set_title(f"Node ({node_idx[0]}, {node_idx[1]})", color='black')
 
-            axs[i].set_ylabel('Temperature [K]')
+            axs[i].set_ylabel('Temperature [K]', color='black')
+            
+            # Limitar eje x a los pasos representados
             axs[i].set_xlim(time[0], time[-1])
+            
+            # Configurar cuadrícula
+            axs[i].grid(True, alpha=0.3, color='gray', linestyle='-', linewidth=0.5)
+            axs[i].tick_params(colors='black')
 
             if i == len(nodes_idx) - 1:
-                axs[i].set_xlabel('Time [s]')
+                axs[i].set_xlabel('Time [s]', color='black')
             if i == 0:
                 axs[i].legend(loc='upper right')
 
-        fig.suptitle('Time evolution of temperature in selected nodes', fontsize=16)
+        # Título principal para visualización
+        main_title = fig.suptitle('Time evolution of temperature in selected nodes', fontsize=16, color='black')
         fig.align_ylabels()
         plt.tight_layout(rect=[0, 0, 1, 0.96])
 
         if save_as_pdf:
+            # Eliminar título principal antes de guardar
+            main_title.set_visible(False)
             os.makedirs('figures', exist_ok=True)
-            fig.savefig(f'figures/{filename}.pdf', format='pdf')
+            fig.savefig(f'figures/{filename}.pdf', format='pdf', facecolor='white')
+            # Restaurar título para visualización
+            main_title.set_visible(True)
         plt.show()
         
     
@@ -1140,3 +1171,219 @@ def plot_mae_per_frame_2way(y_true, y_pred_nofis, y_pred_fis, dataset=None, dt= 
         os.makedirs('figures', exist_ok=True)
         plt.savefig(f'figures/{filename}.pdf', format='pdf')
     plt.show()
+    
+    
+#%%
+def plot_accuracy_curve_by_threshold(T_true, T_pred, umbrales=None, save_as_pdf=False, filename='accuracy_curve_by_threshold'):
+    """
+    Plots the accuracy curve showing the percentage of nodes that remain within 
+    the error threshold throughout the entire sequence.
+    
+    Parameters:
+        T_true: array with shape (T, H, W) - ground truth temperatures
+        T_pred: array with shape (T, H, W) - predicted temperatures  
+        umbrales: array of error thresholds to evaluate. If None, uses np.linspace(0, 25, 26)
+        save_as_pdf: if True, saves the figure as PDF in the 'figures' folder
+        filename: base filename (without extension)
+    """
+    # Default thresholds if not provided
+    if umbrales is None:
+        umbrales = np.linspace(0, 25, 26)
+    
+    # Calculate percentages for each threshold
+    porcentajes = porcentaje_nodos_siempre_dentro_por_umbral(T_true, T_pred, umbrales)
+    
+    # =============== FIGURE CONFIGURATION WITH WHITE BACKGROUND ===============
+    fig, ax = plt.subplots(figsize=(10, 6))
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
+    
+    # Plot the accuracy curve
+    ax.plot(umbrales, porcentajes, label="Node percentage", linewidth=2, color='#1f77b4')
+    
+    # Configure axes
+    ax.set_xlabel('Error threshold [K]', color='black')
+    ax.set_ylabel('Percentage of nodes with error < threshold\nthroughout entire sequence [%]', color='black')
+    
+    # Title only for visualization (will be removed when saving PDF)
+    title_handle = ax.set_title('Cumulative accuracy curve by error threshold', color='black')
+    
+    # Set axis limits
+    ax.set_xlim(0, umbrales[-1])
+    ax.set_ylim(0, 100)
+    
+    # Configure grid
+    ax.grid(True, alpha=0.3, color='gray', linestyle='-', linewidth=0.5)
+    
+    # Configure legend and ticks
+    ax.legend()
+    ax.tick_params(colors='black')
+    
+    plt.tight_layout()
+    
+    if save_as_pdf:
+        # Remove title before saving
+        title_handle.set_visible(False)
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf', facecolor='white')
+        # Restore title for visualization
+        title_handle.set_visible(True)
+    
+    plt.show()
+
+
+def plot_accuracy_comparison_by_threshold(T_true, T_pred_list, model_names, umbrales=None, 
+                                        save_as_pdf=False, filename='accuracy_comparison_by_threshold'):
+    """
+    Plots comparison of accuracy curves for multiple models showing the percentage of nodes 
+    that remain within the error threshold throughout the entire sequence.
+    
+    Parameters:
+        T_true: array with shape (T, H, W) - ground truth temperatures
+        T_pred_list: list of arrays with shape (T, H, W) - predicted temperatures for each model
+        model_names: list of strings with model names for legend
+        umbrales: array of error thresholds to evaluate. If None, uses np.linspace(0, 25, 26)
+        save_as_pdf: if True, saves the figure as PDF in the 'figures' folder
+        filename: base filename (without extension)
+    """
+    # Default thresholds if not provided
+    if umbrales is None:
+        umbrales = np.linspace(0, 25, 26)
+    
+    # Validate inputs
+    if len(T_pred_list) != len(model_names):
+        raise ValueError("Number of prediction arrays must match number of model names")
+    
+    # =============== FIGURE CONFIGURATION WITH WHITE BACKGROUND ===============
+    fig, ax = plt.subplots(figsize=(12, 6))
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
+    
+    # Define colors for different models
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2']
+    
+    # Plot accuracy curve for each model
+    for i, (T_pred, model_name) in enumerate(zip(T_pred_list, model_names)):
+        porcentajes = porcentaje_nodos_siempre_dentro_por_umbral(T_true, T_pred, umbrales)
+        color = colors[i % len(colors)]
+        ax.plot(umbrales, porcentajes, label=model_name, linewidth=2, color=color)
+    
+    # Configure axes
+    ax.set_xlabel('Error threshold [K]', color='black')
+    ax.set_ylabel('Percentage of nodes with error < threshold\nthroughout entire sequence [%]', color='black')
+    
+    # Title only for visualization (will be removed when saving PDF)
+    title_handle = ax.set_title('Model comparison: Cumulative accuracy curve by error threshold', color='black')
+    
+    # Set axis limits
+    ax.set_xlim(0, umbrales[-1])
+    ax.set_ylim(0, 100)
+    
+    # Configure grid
+    ax.grid(True, alpha=0.3, color='gray', linestyle='-', linewidth=0.5)
+    
+    # Configure legend and ticks
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.tick_params(colors='black')
+    
+    plt.tight_layout()
+    
+    if save_as_pdf:
+        # Remove title before saving
+        title_handle.set_visible(False)
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf', bbox_inches='tight', facecolor='white')
+        # Restore title for visualization
+        title_handle.set_visible(True)
+    
+    plt.show()
+
+
+def plot_accuracy_metrics_summary(T_true, T_pred_list, model_names, umbrales=[1, 3, 5, 10], 
+                                save_as_pdf=False, filename='accuracy_metrics_summary'):
+    """
+    Creates a summary table/bar chart showing accuracy metrics for specific thresholds.
+    
+    Parameters:
+        T_true: array with shape (T, H, W) - ground truth temperatures
+        T_pred_list: list of arrays with shape (T, H, W) - predicted temperatures for each model
+        model_names: list of strings with model names
+        umbrales: list of specific thresholds to evaluate
+        save_as_pdf: if True, saves the figure as PDF in the 'figures' folder
+        filename: base filename (without extension)
+    """
+    # Calculate metrics for each model and threshold
+    results = {}
+    for model_name, T_pred in zip(model_names, T_pred_list):
+        results[model_name] = []
+        for umbral in umbrales:
+            porcentaje, _, _ = nodos_siempre_dentro_umbral(T_true, T_pred, umbral=umbral)
+            results[model_name].append(porcentaje)
+    
+    # =============== FIGURE CONFIGURATION WITH WHITE BACKGROUND ===============
+    fig, ax = plt.subplots(figsize=(12, 6))
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
+    
+    # Prepare data for bar chart
+    x = np.arange(len(umbrales))
+    width = 0.8 / len(model_names)
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2']
+    
+    # Create bars for each model
+    for i, (model_name, percentages) in enumerate(results.items()):
+        offset = (i - len(model_names)/2 + 0.5) * width
+        color = colors[i % len(colors)]
+        bars = ax.bar(x + offset, percentages, width, label=model_name, color=color, alpha=0.8)
+        
+        # Add value labels on top of bars
+        for bar, percentage in zip(bars, percentages):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height + 1,
+                   f'{percentage:.1f}%', ha='center', va='bottom', fontsize=9, color='black')
+    
+    # Configure axes
+    ax.set_xlabel('Error threshold [K]', color='black')
+    ax.set_ylabel('Percentage of good nodes [%]', color='black')
+    ax.set_xticks(x)
+    ax.set_xticklabels([f'{u}K' for u in umbrales])
+    
+    # Title only for visualization (will be removed when saving PDF)
+    title_handle = ax.set_title('Model comparison: Accuracy metrics for specific thresholds', color='black')
+    
+    # Set axis limits
+    ax.set_ylim(0, 105)
+    
+    # Configure grid
+    ax.grid(True, alpha=0.3, color='gray', linestyle='-', linewidth=0.5, axis='y')
+    
+    # Configure legend and ticks
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.tick_params(colors='black')
+    
+    plt.tight_layout()
+    
+    if save_as_pdf:
+        # Remove title before saving
+        title_handle.set_visible(False)
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf', bbox_inches='tight', facecolor='white')
+        # Restore title for visualization
+        title_handle.set_visible(True)
+    
+    plt.show()
+    
+    # Print summary table
+    print("\n📊 ACCURACY METRICS SUMMARY")
+    print("="*60)
+    print(f"{'Model':<20}", end="")
+    for umbral in umbrales:
+        print(f"{'Error < ' + str(umbral) + 'K':<12}", end="")
+    print()
+    print("-"*60)
+    
+    for model_name, percentages in results.items():
+        print(f"{model_name:<20}", end="")
+        for percentage in percentages:
+            print(f"{percentage:>10.1f}%", end="  ")
+        print()
