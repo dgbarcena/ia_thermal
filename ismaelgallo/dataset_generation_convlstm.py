@@ -50,8 +50,8 @@ from Dataset_Class_convlstm import PCBDataset_convlstm
 
 # Parámetros de configuración
 n_train = 2500
-n_validation = 500
-n_test = 50
+n_validation = n_train // 5
+n_test = n_validation // 10
 n_data = n_train + n_test + n_validation
 
 # Define los índices para cada split
@@ -65,7 +65,6 @@ dt = 1
 T_init = 298.0
 
 # =============== CONFIGURACIÓN DE ITERACIONES ===============
-# step_intervals = list(range(1, 11))  # Lista de step_intervals a procesar
 step_intervals = [1, 2, 5, 10, 20, 50, 100]
 return_bc_options = [True, False]  # Lista de opciones para return_bc (NO TOCAR)
 
@@ -283,3 +282,4 @@ gc.collect()
 total_time = time.time() - time_start
 print(f"\n🎉 ¡Completado! Tiempo total: {total_time:.2f}s")
 print(f"📊 Se generaron {total_combinations} sets de datasets")
+print(f" Tiempo promedio por dataset: {total_time / total_combinations:.4f}s")
