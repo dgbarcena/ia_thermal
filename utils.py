@@ -1044,3 +1044,36 @@ def predict_casos_consecutivos(Q_casos, T_interfaces_casos, T_env_casos, time_ca
         print(f"   🔄 Cambios en tiempos: {resultado['tiempos_cambio']} s")
     
     return resultado
+
+
+def generate_unique_cases(n_data):
+    """
+    Genera casos únicos evitando duplicados para asegurar diversidad en el análisis.
+    
+    Args:
+        n_data: Número de casos únicos a generar
+        
+    Returns:
+        Q_list: Array de potencias de heaters [W] - shape (n_data, 4)
+        T_int_list: Array de temperaturas de interfaces [K] - shape (n_data, 4)  
+        T_env_list: Array de temperaturas ambiente [K] - shape (n_data,)
+    """
+    seen = set()
+    Q_list, T_int_list, T_env_list = [], [], []
+    
+    while len(Q_list) < n_data:
+        # Generar condiciones aleatorias
+        Q = tuple(np.random.uniform(0.5, 1.5, 4).round(6))        # Potencias [0.5-1.5W]
+        T_int = tuple(np.random.uniform(270, 320, 4).round(2))    # Interfaces [270-320K]
+        T_env = round(float(np.random.uniform(270, 320)), 2)      # Ambiente [270-320K]
+        
+        # Crear clave única para evitar duplicados
+        key = Q + T_int + (T_env,)
+        
+        if key not in seen:
+            seen.add(key)
+            Q_list.append(Q)
+            T_int_list.append(T_int)
+            T_env_list.append(T_env)
+    
+    return np.array(Q_list), np.array(T_int_list), np.array(T_env_list)
