@@ -23,7 +23,9 @@ def train(model, loader, optimizer, device, norm_info, use_physics=False, lambda
         true_vals = batch.y.view(-1)
 
         mask = ~batch.mask_fixed_temp.view(-1)
-        loss_data = criterion(out[mask], true_vals[mask])
+        loss_data = criterion(out[mask], true_vals[mask]) # Este valora solo los nodos no fijos, para ver qué tal generaliza el modelo
+        #loss_data = criterion(out, true_vals) # Este valora todos los nodos, no solo los no fijos, para ver el global
+
 
         loss_physics = compute_physics_loss(
             pred_T_norm=out,
@@ -118,7 +120,8 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
                 pred_graph_masked = pred_graph[mask]
 
                 eps = 1e-8
-                mse = F.mse_loss(pred_graph_masked, true_graph_masked).detach()
+                mse = F.mse_loss(pred_graph_masked, true_graph_masked).detach() #Este valora solo los nodos no fijos, para ver qué tal generaliza el modelo
+                #mse = F.mse_loss(pred_graph, true_graph).detach() #Este valora todos los nodos
                 mae = F.l1_loss(pred_graph_masked, true_graph_masked).detach()
 
                 ss_res = torch.sum((true_graph_masked - pred_graph_masked) ** 2)
@@ -227,35 +230,61 @@ def predict(model, loader, device, norm_info):
 
 
 def plot_temperature_maps(true_vals, pred_vals):
-    true_vals = true_vals.numpy()
-    pred_vals = pred_vals.numpy()
+    """
+    Muestra:
+    - Una figura con mapas de temperaturas reales y predichas, lado a lado.
+    - Una figura separada con el mapa de error absoluto.
+    """
+    
+    
+    plt.style.use('default')
+    plt.rcParams["figure.figsize"] = (6, 4)
+    plt.rcParams["font.family"] = "Times New Roman"
+    plt.rcParams["font.size"] = 12
+    plt.rcParams["text.usetex"] = False  # Usa MathText mientras MiKTeX no esté listo
+    plt.rcParams["axes.titlesize"] = 17
+    
+    # Asegurar numpy arrays
+    true_vals = true_vals.numpy() if hasattr(true_vals, 'numpy') else np.array(true_vals)
+    pred_vals = pred_vals.numpy() if hasattr(pred_vals, 'numpy') else np.array(pred_vals)
+    
     total_nodos = true_vals.shape[0]
     nodos_lado = int(np.sqrt(total_nodos))
     if nodos_lado ** 2 != total_nodos:
-        raise ValueError("El número de nodos no forma cuadrado perfecto.")
+        raise ValueError("El número de nodos no forma un cuadrado perfecto.")
     
     true_vals = true_vals.reshape(nodos_lado, nodos_lado)
     pred_vals = pred_vals.reshape(nodos_lado, nodos_lado)
     error_abs = np.abs(true_vals - pred_vals)
     
+    # Escala común para temperaturas
     vmin_temp = min(true_vals.min(), pred_vals.min())
     vmax_temp = max(true_vals.max(), pred_vals.max())
-    
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-    
-    im1 = axes[0].imshow(true_vals, cmap='jet', vmin=vmin_temp, vmax=vmax_temp)
-    axes[0].set_title("Temperaturas Reales (K)")
-    fig.colorbar(im1, ax=axes[0])
-    
-    im2 = axes[1].imshow(pred_vals, cmap='jet', vmin=vmin_temp, vmax=vmax_temp)
-    axes[1].set_title("Temperaturas Predichas (K)")
-    fig.colorbar(im2, ax=axes[1])
-    
-    im3 = axes[2].imshow(error_abs, cmap='jet')
-    axes[2].set_title("Error Absoluto (K)")
-    fig.colorbar(im3, ax=axes[2])
-    
-    plt.tight_layout()
+
+    # === FIGURA 1: True y Predicted ===
+    fig1, axes1 = plt.subplots(1, 2, figsize=(12, 5))  # Tamaño más ancho solo para esta figura
+
+    im1 = axes1[0].imshow(true_vals, cmap='jet', vmin=vmin_temp, vmax=vmax_temp)
+    axes1[0].set_title("Real Temperatures (K)")
+    fig1.colorbar(im1, ax=axes1[0])
+
+    im2 = axes1[1].imshow(pred_vals, cmap='jet', vmin=vmin_temp, vmax=vmax_temp)
+    axes1[1].set_title("Predicted Temperatures (K)")
+    fig1.colorbar(im2, ax=axes1[1])
+
+    fig1.suptitle("Real vs Predicted Temperature Maps")
+    fig1.tight_layout()
+    plt.show()
+
+    # === FIGURA 2: Error Absoluto ===
+    fig2, ax2 = plt.subplots(figsize=(6, 5))  # Figura separada para el error
+
+    im3 = ax2.imshow(error_abs, cmap='jet')
+    ax2.set_title("Absolute Error (K)")
+    fig2.colorbar(im3, ax=ax2)
+
+    fig2.suptitle("Absolute Error Map")
+    fig2.tight_layout()
     plt.show()
 
 def compute_physics_loss(pred_T_norm, edge_index, batch, Q_heaters_norm, T_env_norm, norm_info):
