@@ -24,7 +24,7 @@ class NNConvNet(nn.Module):
 
         # Capa de entrada
         nn1 = nn.Sequential(nn.Linear(edge_dim, hidden_dim * input_dim),
-                            nn.ReLU(),
+                            nn.SiLU(),
                             nn.Linear(hidden_dim * input_dim, hidden_dim * input_dim))
         self.convs.append(NNConv(input_dim, hidden_dim, nn1, aggr='mean'))
         if self.use_batchnorm:
@@ -33,7 +33,7 @@ class NNConvNet(nn.Module):
         # Capas ocultas
         for _ in range(num_layers - 2):
             nn_hidden = nn.Sequential(nn.Linear(edge_dim, hidden_dim * hidden_dim),
-                                      nn.ReLU(),
+                                      nn.SiLU(),
                                       nn.Linear(hidden_dim * hidden_dim, hidden_dim * hidden_dim))
             self.convs.append(NNConv(hidden_dim, hidden_dim, nn_hidden, aggr='mean'))
             if self.use_batchnorm:
@@ -41,7 +41,7 @@ class NNConvNet(nn.Module):
 
         # Capa de salida
         nn_out = nn.Sequential(nn.Linear(edge_dim, hidden_dim * output_dim),
-                               nn.ReLU(),
+                               nn.SiLU(),
                                nn.Linear(hidden_dim * output_dim, hidden_dim * output_dim))
         self.convs.append(NNConv(hidden_dim, output_dim, nn_out, aggr='mean'))
 
