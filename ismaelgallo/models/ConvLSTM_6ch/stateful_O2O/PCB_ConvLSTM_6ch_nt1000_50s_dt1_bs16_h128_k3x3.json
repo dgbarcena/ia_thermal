@@ -1,26 +1,26 @@
 {
-    "start_datetime": "2025-06-16 13:20:25",
-    "training_duration_minutes": 7.219255324204763,
+    "start_datetime": "2025-06-16 11:09:50",
+    "training_duration_minutes": 0.2539101719856262,
     "model_parameters": 618113,
     "system_specs": {
-        "platform": "Windows-10-10.0.19041-SP0",
-        "python_version": "3.9.21",
-        "torch_version": "2.5.1",
+        "platform": "Linux-6.1.123+-x86_64-with-glibc2.35",
+        "python_version": "3.11.13",
+        "torch_version": "2.5.1+cu124",
         "cuda_available": true,
-        "cuda_version": "11.8",
+        "cuda_version": "12.4",
         "gpu_count": 1,
-        "primary_gpu_name": "NVIDIA GeForce GTX 1050",
+        "primary_gpu_name": "NVIDIA L4",
         "gpu_details": {
             "gpu_0": {
-                "name": "NVIDIA GeForce GTX 1050",
-                "memory_total_gb": 2.0,
-                "compute_capability": "6.1",
-                "multi_processor_count": 5
+                "name": "NVIDIA L4",
+                "memory_total_gb": 22.16,
+                "compute_capability": "8.9",
+                "multi_processor_count": 58
             }
         },
-        "cpu_count_logical": 6,
+        "cpu_count_logical": 12,
         "cpu_count_physical": 6,
-        "memory_total_gb": 15.92
+        "memory_total_gb": 52.96
     },
     "simulation_time": 50,
     "dt": 1,
@@ -53,33 +53,15 @@
         "final_lr": 0.001
     },
     "early_stop_patience": 50,
-    "epochs_trained": 11,
-    "best_val_loss": 4.127306769637821e-05,
+    "epochs_trained": 2,
+    "best_val_loss": 0.02686341995230088,
     "train_loss": [
-        2.5463070616953904e-05,
-        1.7400962095716896e-05,
-        1.3412415697414887e-05,
-        1.0860124449310308e-05,
-        9.194750014608468e-06,
-        7.941282713127005e-06,
-        7.047757908222838e-06,
-        6.3923683387295725e-06,
-        5.690059590542371e-06,
-        5.190287148642321e-06,
-        4.8635533930214555e-06
+        0.24695857815326205,
+        0.018594771963618105
     ],
     "val_loss": [
-        0.00039717523927370517,
-        0.00026364545584118995,
-        0.0001508080928872984,
-        0.00010509940889628175,
-        0.00015067636559251696,
-        9.639363046377324e-05,
-        0.00010259160850322447,
-        0.000160359893925488,
-        4.127306769637821e-05,
-        0.00020999192313935893,
-        6.692079505927932e-05
+        0.256051955314783,
+        0.02686341995230088
     ],
     "training_config": {
         "amp_enabled": true,
