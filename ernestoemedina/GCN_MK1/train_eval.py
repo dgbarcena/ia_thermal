@@ -23,8 +23,8 @@ def train(model, loader, optimizer, device, norm_info, use_physics=False, lambda
         true_vals = batch.y.view(-1)
 
         mask = ~batch.mask_fixed_temp.view(-1)
-        loss_data = criterion(out[mask], true_vals[mask])  # Este valora solo los nodos no fijos, para ver qué tal generaliza el modelo
-        #loss_data = criterion(out, true_vals) # Este valora todos los nodos, no solo los no fijos, para ver el global
+        #loss_data = criterion(out[mask], true_vals[mask])  # Este valora solo los nodos no fijos, para ver qué tal generaliza el modelo
+        loss_data = criterion(out, true_vals) # Este valora todos los nodos, no solo los no fijos, para ver el global
 
 
         loss_physics = compute_physics_loss(
@@ -120,8 +120,8 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
                 pred_graph_masked = pred_graph[mask]
 
                 eps = 1e-8
-                mse = F.mse_loss(pred_graph_masked, true_graph_masked).detach() #Este valora solo los nodos no fijos, para ver qué tal generaliza el modelo
-                #mse = F.mse_loss(pred_graph, true_graph).detach() #Este valora todos los nodos
+                #mse = F.mse_loss(pred_graph_masked, true_graph_masked).detach() #Este valora solo los nodos no fijos, para ver qué tal generaliza el modelo
+                mse = F.mse_loss(pred_graph, true_graph).detach() #Este valora todos los nodos
                 mae = F.l1_loss(pred_graph_masked, true_graph_masked).detach()
 
                 ss_res = torch.sum((true_graph_masked - pred_graph_masked) ** 2)
@@ -239,7 +239,7 @@ def plot_temperature_maps(true_vals, pred_vals):
     
     plt.style.use('default')
     plt.rcParams["figure.figsize"] = (6, 4)
-    plt.rcParams["font.family"] = "Times New Roman"
+    plt.rcParams["font.family"] = "serif"
     plt.rcParams["font.size"] = 12
     plt.rcParams["text.usetex"] = False  # Usa MathText mientras MiKTeX no esté listo
     plt.rcParams["axes.titlesize"] = 17
