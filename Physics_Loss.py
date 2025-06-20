@@ -105,7 +105,6 @@ class LaEnergiaNoAparece(nn.Module):
         return torch.mean(torch.abs(excessEnergy))
     
     
-    
 class PhysicsLossTransient(nn.Module):
     def __init__(self, 
                  L: float = 0.1,
