@@ -49,7 +49,7 @@ from PCB_solver_tr import PCB_case_2
 from Dataset_Class_convlstm import PCBDataset_convlstm
 
 # Parámetros de configuración
-n_train = 2500
+n_train = 2000
 n_validation = n_train // 5
 n_test = n_validation // 10
 n_data = n_train + n_test + n_validation
