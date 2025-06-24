@@ -25,3 +25,4 @@ nbconvert
 sympy
 pyyaml
 optuna
+dill
