@@ -67,6 +67,8 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
     all_mse, all_mae, all_r2, all_accuracy = [], [], [], []
     all_true_vals, all_pred_vals = [], []
     all_physics_loss, all_boundary_loss, all_heater_loss = [], [], []
+    max_error_overall = 0.0
+    sum_max_errors_per_graph = 0.0
 
     max_temp_output = norm_info["max_T_outputs"].item()
 
@@ -118,6 +120,13 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
 
                 true_graph_masked = true_graph[mask]
                 pred_graph_masked = pred_graph[mask]
+                
+                # --- Cálculo de errores máximos ---
+                error_abs = torch.abs(pred_graph - true_graph)
+                max_error_this_graph = error_abs.max().item()
+                max_error_overall = max(max_error_overall, max_error_this_graph)
+                sum_max_errors_per_graph += max_error_this_graph
+
 
                 eps = 1e-8
                 #mse = F.mse_loss(pred_graph_masked, true_graph_masked).detach() #Este valora solo los nodos no fijos, para ver qué tal generaliza el modelo
@@ -173,6 +182,10 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
     acc_mean = torch.stack(all_accuracy).mean().item()
     rmse_mean = np.sqrt(mse_mean)
 
+    max_error_overall_K = max_error_overall * max_temp_output
+    mean_max_error_per_graph_K = (sum_max_errors_per_graph / len(all_mse)) * max_temp_output
+
+
     physics_loss_mean = torch.stack(all_physics_loss).mean().item() if use_physics else 0.0
     boundary_loss_mean = torch.stack(all_boundary_loss).mean().item() if use_boundary_loss else 0.0
     heater_loss_mean = torch.stack(all_heater_loss).mean().item() if use_heater_loss else 0.0
@@ -183,7 +196,7 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
         + lambda_boundary * boundary_loss_mean
         + lambda_heater * heater_loss_mean
     )
-
+    
     return (
         mse_mean,
         mae_mean,
@@ -194,6 +207,8 @@ def evaluate(model, loader, device, norm_info, error_threshold, use_physics=Fals
         heater_loss_mean,
         rmse_mean,
         val_total_loss,
+        max_error_overall_K,
+        mean_max_error_per_graph_K,
     )
 
 
