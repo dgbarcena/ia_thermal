@@ -1,5 +1,6 @@
 venv/
 *.pth
+!ismaelgallo/models/**/*.pth
 
 __pycache__/
 *.pyc
