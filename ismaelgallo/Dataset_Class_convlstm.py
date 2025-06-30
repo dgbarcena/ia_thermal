@@ -4,7 +4,7 @@ import os
 
 #%%
 
-def load_dataset_convlstm(base_path='.', folder='datasets', dt = 1, dataset_type=None, physic=False):   
+def load_dataset_convlstm(base_path='.', folder='datasets', dt = 1, dataset_type=None, physic=False, variable_T_init=False):   
     """
     Carga un dataset .pth desde una carpeta, por defecto el dataset base completo.
     
@@ -13,10 +13,22 @@ def load_dataset_convlstm(base_path='.', folder='datasets', dt = 1, dataset_type
     - folder: subcarpeta donde están los archivos (por defecto, 'datasets')
     - dataset_type: 'train', 'test', 'val' o None (por defecto carga el dataset base completo)
     - physic: si True, carga el dataset con condiciones de contorno físicas (por defecto False)
+    - variable_T_init: si True, carga el dataset con temperatura inicial variable (por defecto False)
     - dt: paso de tiempo del solver (por defecto 1)
     """
     
-    if physic:
+    # Construir el nombre del archivo basado en las opciones
+    if physic and variable_T_init:
+        # Con física y temperatura inicial variable
+        if dataset_type is None:
+            filename = f'PCB_convlstm_dt{dt}_phy_var_6ch_dataset.pth'
+        else:
+            valid_types = ['train', 'test', 'val']
+            if dataset_type not in valid_types:
+                raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None para el dataset base.")
+            filename = f"PCB_convlstm_dt{dt}_phy_var_6ch_dataset_{dataset_type}.pth"
+    elif physic and not variable_T_init:
+        # Con física y temperatura inicial fija
         if dataset_type is None:
             filename = f'PCB_convlstm_dt{dt}_phy_6ch_dataset.pth'
         else:
@@ -24,7 +36,17 @@ def load_dataset_convlstm(base_path='.', folder='datasets', dt = 1, dataset_type
             if dataset_type not in valid_types:
                 raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None para el dataset base.")
             filename = f"PCB_convlstm_dt{dt}_phy_6ch_dataset_{dataset_type}.pth"
+    elif not physic and variable_T_init:
+        # Sin física y temperatura inicial variable
+        if dataset_type is None:
+            filename = f'PCB_convlstm_dt{dt}_var_6ch_dataset.pth'
+        else:
+            valid_types = ['train', 'test', 'val']
+            if dataset_type not in valid_types:
+                raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None para el dataset base.")
+            filename = f"PCB_convlstm_dt{dt}_var_6ch_dataset_{dataset_type}.pth"
     else:
+        # Sin física y temperatura inicial fija (caso original)
         if dataset_type is None:
             filename = f'PCB_convlstm_dt{dt}_6ch_dataset.pth'
         else:
@@ -50,7 +72,7 @@ class PCBDataset_convlstm(Dataset):
                  T_interfaces_mean:torch.tensor,T_interfaces_std:torch.tensor,Q_heaters_mean:torch.tensor,
                  Q_heaters_std:torch.tensor,T_env_mean:torch.tensor,T_env_std:torch.tensor,T_outputs_mean:torch.tensor,
                  T_outputs_std:torch.tensor,
-                 return_bc:bool = False):
+                 return_bc:bool = False, T_init=None):
         
         """
         Espera tensores de entrada con shape:
@@ -58,6 +80,11 @@ class PCBDataset_convlstm(Dataset):
         - Q_heaters: (N, T, 13, 13)
         - T_env: (N, T, 13, 13)
         - T_outputs: (N, T, 13, 13)
+        - T_init: temperatura inicial. Puede ser:
+            * None: usa 298.0 por defecto para todas las muestras
+            * float/int: usa el mismo valor para todas las muestras
+            * torch.tensor de shape (N,): temperatura inicial diferente para cada muestra
+            * torch.tensor de shape (N, 13, 13): mapa de temperatura inicial completo para cada muestra
         """
         
         self.return_bc = return_bc
@@ -83,6 +110,27 @@ class PCBDataset_convlstm(Dataset):
         self.T_env_mean = T_env_mean
         self.T_env_std = T_env_std
 
+        # Procesar temperatura inicial
+        N, T, _, _ = T_interfaces.shape
+        if T_init is None:
+            # Valor por defecto
+            self.T_init = torch.full((N, 13, 13), 298.0)
+        elif isinstance(T_init, (int, float)):
+            # Mismo valor para todas las muestras
+            self.T_init = torch.full((N, 13, 13), float(T_init))
+        elif isinstance(T_init, torch.Tensor):
+            if T_init.shape == (N,):
+                # Un valor por muestra, expandir a mapa completo
+                self.T_init = T_init.unsqueeze(-1).unsqueeze(-1).expand(N, 13, 13)
+            elif T_init.shape == (N, 13, 13):
+                # Mapa completo por muestra
+                self.T_init = T_init.clone()
+            else:
+                raise ValueError(f"T_init con shape {T_init.shape} no es válido. "
+                               f"Debe ser (N,) o (N, 13, 13) donde N={N}")
+        else:
+            raise TypeError(f"T_init debe ser None, int, float o torch.Tensor, no {type(T_init)}")
+
         # self.inputs = torch.empty([T_interfaces.shape[0],4,13,13])
         # self.T_interfaces = (T_interfaces-T_interfaces_mean)/T_interfaces_std
         # self.Q_heaters = (Q_heaters-Q_heaters_mean)/Q_heaters_std
@@ -98,11 +146,10 @@ class PCBDataset_convlstm(Dataset):
         # self.inputs[:,3,:,:] = torch.cat([first_step, self.outputs[:-1]], dim=0)
         
         # print(f"Input shape: {T_interfaces.shape}")  # (N, T, 13, 13)
-        N, T, _, _ = T_interfaces.shape
         self.inputs = []
         
         T_current = torch.zeros_like(T_outputs)
-        T_current[:, 0] = 298.0  # Condición inicial para t=0 (puedes normalizar si lo necesitas)
+        T_current[:, 0] = self.T_init  # Usar temperatura inicial personalizada
         T_current[:, 1:] = T_outputs[:, :-1]  # Para t>0, el output del paso anterior
         
         
@@ -161,13 +208,17 @@ class PCBDataset_convlstm(Dataset):
 
         return x_denorm
     
-    def create_input_from_values(self, Q_heaters, T_interfaces, T_env, T_seq, sequence_length=1001, autorregress=False):
+    def create_input_from_values(self, Q_heaters, T_interfaces, T_env, T_seq, T_init=None, sequence_length=1001, autorregress=False):
         """
         Crea un input normalizado de forma (1, T, 6, 13, 13) a partir de:
         - Q_heaters: np.array de shape (4,)
         - T_interfaces: np.array de shape (4,)
         - T_env: float o escalar
         - T_seq: np.array de shape (T, 13, 13)
+        - T_init: temperatura inicial. Puede ser:
+            * None: usa 298.0 por defecto
+            * float/int: usa el mismo valor
+            * np.array de shape (13, 13): mapa de temperatura inicial completo
         - autorregress: bool, si True, se calcula solo el primer paso de la secuencia
         - sequence_length: int, longitud de la secuencia (por defecto 1001)
 
@@ -181,11 +232,34 @@ class PCBDataset_convlstm(Dataset):
         T_env = torch.tensor(T_env, dtype=torch.float32)
         T_seq = torch.tensor(T_seq, dtype=torch.float32)
         
+        # Procesar temperatura inicial
+        if T_init is None:
+            # Valor por defecto
+            T_init_tensor = torch.full((13, 13), 298.0)
+        elif isinstance(T_init, (int, float)):
+            # Mismo valor para todo el mapa
+            T_init_tensor = torch.full((13, 13), float(T_init))
+        elif isinstance(T_init, (list, tuple)):
+            # Convertir a tensor y expandir si es necesario
+            T_init_array = torch.tensor(T_init, dtype=torch.float32)
+            if T_init_array.shape == (13, 13):
+                T_init_tensor = T_init_array
+            else:
+                raise ValueError(f"T_init con shape {T_init_array.shape} no es válido. "
+                               f"Debe ser (13, 13)")
+        else:
+            # Asumir que ya es un array/tensor
+            T_init_tensor = torch.tensor(T_init, dtype=torch.float32)
+            if T_init_tensor.shape != (13, 13):
+                raise ValueError(f"T_init con shape {T_init_tensor.shape} no es válido. "
+                               f"Debe ser (13, 13)")
+        
         # Normalizar
         Q_norm = (Q_heaters - self.Q_heaters_mean) / self.Q_heaters_std
         T_int_norm = (T_interfaces - self.T_interfaces_mean) / self.T_interfaces_std
         T_env_norm = (T_env - self.T_env_mean) / self.T_env_std
         T_seq_norm = (T_seq - self.T_outputs_mean) / self.T_outputs_std
+        T_init_norm = (T_init_tensor - self.T_outputs_mean) / self.T_outputs_std
 
         # Crear mapas (6, 13, 13)
         Q_map = torch.zeros((13, 13))
@@ -211,7 +285,7 @@ class PCBDataset_convlstm(Dataset):
             input_bc = torch.stack([T_map, Q_map, T_env_map, mask_interfaces_map, mask_heaters_map], dim=0)
             input_tensor = torch.zeros((1, 1, 6, nodes_side, nodes_side), dtype=torch.float32) # se añade una dimensión de tiempo
             input_tensor[:, :, 0:5, :, :] = input_bc[0:5, :, :]
-            input_tensor[:, :, 5, :, :] = T_seq_norm[0, :, :]
+            input_tensor[:, :, 5, :, :] = T_init_norm
             # print(f"Input tensor shape: {input_tensor.shape}")
         else:
             # print('Calculando input tensor para entrenamiento, toda la secuencia con datos del solver')
@@ -364,7 +438,7 @@ class TrimmedDataset_convlstm(Dataset):
 # -----------------------------------------------------------------------------
 def load_trimmed_dataset_convlstm(base_path='.', folder='datasets', dataset_type=None,
                          max_samples=None, time_steps_input=None, time_steps_output=None,
-                         to_device=False, physic=False, dt = 1):
+                         to_device=False, physic=False, variable_T_init=False, dt = 1):
     """
     Carga un dataset base y lo encapsula en un TrimmedDataset, compatible con casos transitorios y estacionarios.
 
@@ -377,35 +451,24 @@ def load_trimmed_dataset_convlstm(base_path='.', folder='datasets', dataset_type
         time_steps_output (int): número de pasos temporales de salida (si es transitorio)
         to_device (bool): si se debe mover a CUDA (si está disponible)
         physic (bool): si True, devuelve un dataset con condiciones de contorno físicas
+        variable_T_init (bool): si True, carga el dataset con temperatura inicial variable
         dt (int): paso de tiempo del solver (por defecto 1)
 
     Returns:
         TrimmedDataset
     """
-    if physic:
-        if dataset_type is None:
-            filename = f'PCB_convlstm_dt{dt}_phy_6ch_dataset.pth'
-        else:
-            valid_types = ['train', 'test', 'val']
-            if dataset_type not in valid_types:
-                raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None.")
-            filename = f"PCB_convlstm_dt{dt}_phy_6ch_dataset_{dataset_type}.pth"
-    else:
-        if dataset_type is None:
-            filename = f'PCB_convlstm_dt{dt}_6ch_dataset.pth'
-        else:
-            valid_types = ['train', 'test', 'val']
-            if dataset_type not in valid_types:
-                raise ValueError(f"Tipo de dataset inválido. Usa uno de: {valid_types} o None.")
-            filename = f"PCB_convlstm_dt{dt}_6ch_dataset_{dataset_type}.pth"
+    # Usar la función load_dataset_convlstm para cargar el dataset
+    # Esto evita duplicar la lógica de construcción de nombres de archivos
+    base_dataset = load_dataset_convlstm(
+        base_path=base_path,
+        folder=folder,
+        dt=dt,
+        dataset_type=dataset_type,
+        physic=physic,
+        variable_T_init=variable_T_init
+    )
 
-    full_path = os.path.join(base_path, folder, filename)
-
-    if not os.path.exists(full_path):
-        raise FileNotFoundError(f"❌ No se encontró el archivo: {full_path}")
-
-    print(f"✅ Cargando dataset {'base' if dataset_type is None else dataset_type} desde: {full_path}")
-    base_dataset = torch.load(full_path)
+    print(f"✅ Cargando dataset {'base' if dataset_type is None else dataset_type} (trimmed)")
 
     if to_device and hasattr(base_dataset, 'to_device'):
         base_dataset.to_device()

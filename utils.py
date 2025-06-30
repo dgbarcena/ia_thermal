@@ -17,6 +17,34 @@ from ismaelgallo.Dataset_Class_convlstm import PCBDataset_convlstm
 # # from Convolutional_NN.Dataset_Class import *
 # from ismaelgallo.Dataset_Class_convlstm import PCBDataset_convlstm
 
+#%%
+def downsample_sequences(input_seq, output_seq, step_interval):
+    """
+    Recorta las secuencias tomando muestras cada 'step_interval' pasos.
+    
+    Args:
+        input_seq: tensor (n_data, seq_len, channels, H, W)
+        output_seq: tensor (n_data, seq_len, H, W) 
+        step_interval: int, intervalo de pasos (ej: 10 para tomar pasos 0, 10, 20, ...)
+    
+    Returns:
+        input_seq_downsampled: tensor recortado
+        output_seq_downsampled: tensor recortado
+    """
+    # Generar índices: 0, step_interval, 2*step_interval, ...
+    max_steps = input_seq.shape[1]  # seq_len
+    indices = list(range(0, max_steps, step_interval))
+    
+    print(f"  Secuencia original: {max_steps} pasos")
+    print(f"  Secuencia recortada: {len(indices)} pasos (cada {step_interval} pasos)")
+    print(f"  Índices seleccionados: {indices[:10]}{'...' if len(indices) > 10 else ''}")
+    
+    # Recortar usando los índices
+    input_seq_downsampled = input_seq[:, indices, ...]
+    output_seq_downsampled = output_seq[:, indices, ...]
+    
+    return input_seq_downsampled, output_seq_downsampled
+
 
 def porcentaje_error_bajo_umbral(T_true: np.ndarray, T_pred: np.ndarray, umbral: float = 5.0) -> float:
     """
@@ -551,6 +579,7 @@ def predict_from_conditions(Q_heaters: np.ndarray,
                             T_interfaces: np.ndarray,
                             T_env: float,
                             sequence_length: int = 1001,
+                            T_init: Union[np.ndarray, float] = None,
                             T_seq_initial: np.ndarray = None,
                             model=None,
                             dataset=None,
@@ -560,7 +589,8 @@ def predict_from_conditions(Q_heaters: np.ndarray,
       - Q_heaters:        (4,)             np.ndarray
       - T_interfaces:     (4,)             np.ndarray
       - T_env:            scalar           float
-      - T_seq_initial:    (13,13)          np.ndarray (el mapa inicial)
+      - T_init:           (13,13) np.ndarray o float (temperatura inicial - parámetro preferido)
+      - T_seq_initial:    (13,13)          np.ndarray (mapa inicial - mantenido por compatibilidad)
       - sequence_length:  número de pasos a predecir
       - model:            tu PCB_ConvLSTM cargado y en .eval()
       - dataset:          instancia de PCBDataset_convlstm con create_input_from_values
@@ -568,19 +598,35 @@ def predict_from_conditions(Q_heaters: np.ndarray,
 
     Devuelve:
       np.ndarray de forma (sequence_length, 13, 13) con la serie desnormalizada.
+      
+    Nota:
+      - Si T_init es float, se crea un mapa uniforme (13,13) con ese valor
+      - Si se proporcionan ambos T_init y T_seq_initial, T_init tiene prioridad.
+      - Si no se proporciona ninguno, se usa temperatura uniforme de 298.0 K.
     """
 
     model.eval()
     if device is None:
         device = next(model.parameters()).device
-        
-    if T_seq_initial is None:
-        T_seq_initial = np.full((13, 13), 298.0)  # Mapa por defecto a 298 K
+    
+    # Determinar la condición inicial de temperatura
+    if T_init is not None:
+        if isinstance(T_init, (int, float)):
+            # Si T_init es un escalar, crear mapa uniforme
+            T_map = np.full((13, 13), T_init)
+        else:
+            # Si T_init es un array, usarlo directamente
+            T_map = T_init
+    elif T_seq_initial is not None:
+        T_map = T_seq_initial
+    else:
+        T_map = np.full((13, 13), 298.0)  # Mapa por defecto a 298 K
 
     # 1) Primer input (1,1,6,13,13)
     input0 = dataset.create_input_from_values(
         Q_heaters, T_interfaces, T_env,
-        T_seq=np.expand_dims(T_seq_initial, 0),
+        T_init=T_map,
+        T_seq=np.expand_dims(T_map, 0),
         sequence_length=sequence_length,
         autorregress=True
     ).to(device)
@@ -988,7 +1034,7 @@ def predict_casos_consecutivos(Q_casos, T_interfaces_casos, T_env_casos, time_ca
             T_interfaces=T_interfaces_i,
             T_env=T_env_i,
             sequence_length=sequence_length_i,
-            T_seq_initial=T_map_actual,  # Usar el estado final del caso anterior
+            T_init=T_map_actual,  # Usar el estado final del caso anterior
             model=model,
             dataset=dataset,
             device=device

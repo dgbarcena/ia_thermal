@@ -4,36 +4,6 @@ import sys
 import time
 import torch
 
-#%%
-def downsample_sequences(input_seq, output_seq, step_interval):
-    """
-    Recorta las secuencias tomando muestras cada 'step_interval' pasos.
-    
-    Args:
-        input_seq: tensor (n_data, seq_len, channels, H, W)
-        output_seq: tensor (n_data, seq_len, H, W) 
-        step_interval: int, intervalo de pasos (ej: 10 para tomar pasos 0, 10, 20, ...)
-    
-    Returns:
-        input_seq_downsampled: tensor recortado
-        output_seq_downsampled: tensor recortado
-    """
-    # Generar índices: 0, step_interval, 2*step_interval, ...
-    max_steps = input_seq.shape[1]  # seq_len
-    indices = list(range(0, max_steps, step_interval))
-    
-    print(f"  Secuencia original: {max_steps} pasos")
-    print(f"  Secuencia recortada: {len(indices)} pasos (cada {step_interval} pasos)")
-    print(f"  Índices seleccionados: {indices[:10]}{'...' if len(indices) > 10 else ''}")
-    
-    # Recortar usando los índices
-    input_seq_downsampled = input_seq[:, indices, ...]
-    output_seq_downsampled = output_seq[:, indices, ...]
-    
-    return input_seq_downsampled, output_seq_downsampled
-
-#%%
-
 base_path = os.path.dirname(__file__)
 
 # Añadir 'scripts'
@@ -48,8 +18,14 @@ if not os.path.exists(path):
 from PCB_solver_tr import PCB_case_2
 from Dataset_Class_convlstm import PCBDataset_convlstm
 
+# Añadir el directorio raíz (ia_thermal) al path
+root_path = os.path.join(base_path, '..')
+sys.path.append(str(root_path))
+
+from utils import downsample_sequences
+
 # Parámetros de configuración
-n_train = 2000
+n_train = 50
 n_validation = n_train // 5
 n_test = n_validation // 10
 n_data = n_train + n_test + n_validation
@@ -67,11 +43,13 @@ T_init = 298.0
 # =============== CONFIGURACIÓN DE ITERACIONES ===============
 step_intervals = [1, 2, 5, 10, 20, 50, 100]
 return_bc_options = [True, False]  # Lista de opciones para return_bc (NO TOCAR)
+T_init_options = [298.0, 'variable']  # Nueva opción: temperatura inicial fija o variable
 
 print(f"🚀 Generando datasets para:")
 print(f"   Step intervals: {step_intervals}")
 print(f"   Return BC options: {return_bc_options}")
-print(f"   Total combinaciones: {len(step_intervals) * len(return_bc_options)}")
+print(f"   T_init options: {T_init_options}")
+print(f"   Total combinaciones: {len(step_intervals) * len(return_bc_options) * len(T_init_options)}")
 print("=" * 60)
 
 # =============== GENERACIÓN DE DATOS (UNA SOLA VEZ) ===============
@@ -94,6 +72,9 @@ def generate_unique_cases(n_data):
 
 Q_random, T_interfaces_random, T_env_random = generate_unique_cases(n_data)
 
+# Generar temperaturas iniciales variables
+T_init_random = np.random.uniform(270, 320, n_data).round(2)
+
 print("📊 Generando datos del solver (una sola vez)...")
 time_start = time.time()
 
@@ -104,8 +85,11 @@ for i in range(n_data):
     if i % 100 == 0:
         print(f"  Generando elemento {i} | tiempo: {time.time()-time_start:.2f}s")
     
+    # Usar temperatura inicial variable para cada caso
+    T_init_case = T_init_random[i]
+    
     T, _, _, _ = PCB_case_2(
-        solver='transient', display=False, time=time_sim, dt=dt, T_init=T_init,
+        solver='transient', display=False, time=time_sim, dt=dt, T_init=T_init_case,
         Q_heaters=Q_random[i], T_interfaces=T_interfaces_random[i], Tenv=T_env_random[i]
     )
     T = T.reshape(-1, 13, 13)
@@ -133,7 +117,7 @@ for i in range(n_data):
 
         # Canal 6: output anterior o condición inicial
         if t == 0:
-            T_init_map = np.full((13, 13), T_init, dtype=np.float32)
+            T_init_map = np.full((13, 13), T_init_case, dtype=np.float32)  # Usar temperatura inicial variable
         else:
             T_init_map = output_seq[-1][t-1]
         
@@ -159,7 +143,7 @@ T_env_std = T_env_random.std()
 print("=" * 60)
 
 # =============== BUCLES DE PROCESAMIENTO ===============
-total_combinations = len(step_intervals) * len(return_bc_options)
+total_combinations = len(step_intervals) * len(return_bc_options) * len(T_init_options)
 current_combination = 0
 
 for step_interval in step_intervals:
@@ -174,97 +158,125 @@ for step_interval in step_intervals:
     output_std = output_seq.std()
     
     for return_bc in return_bc_options:
-        current_combination += 1
-        bc_str = "phy" if return_bc else "std"
+        for T_init_option in T_init_options:
+            current_combination += 1
+            bc_str = "phy" if return_bc else "std"
+            init_str = "var" if T_init_option == 'variable' else "fix"
+            
+            print(f"\n  📦 [{current_combination}/{total_combinations}] Creando datasets con return_bc={return_bc} ({bc_str}), T_init={T_init_option} ({init_str})")
+            
+            # Determinar T_init para el dataset
+            if T_init_option == 'variable':
+                T_init_dataset = torch.tensor(T_init_random, dtype=torch.float32)
+            else:
+                T_init_dataset = T_init_option
         
-        print(f"\n  📦 [{current_combination}/{total_combinations}] Creando datasets con return_bc={return_bc} ({bc_str})")
+            # Crear dataset completo
+            dataset = PCBDataset_convlstm(
+                T_interfaces=input_seq[:, :, 0, ...],
+                Q_heaters=input_seq[:, :, 1, ...],
+                T_env=input_seq[:, :, 2, ...],
+                T_outputs=output_seq,
+                T_interfaces_mean=T_interfaces_mean,
+                T_interfaces_std=T_interfaces_std,
+                Q_heaters_mean=Q_heaters_mean,
+                Q_heaters_std=Q_heaters_std,
+                T_env_mean=T_env_mean,
+                T_env_std=T_env_std,
+                T_outputs_mean=output_mean,
+                T_outputs_std=output_std,
+                return_bc=return_bc,
+                T_init=T_init_dataset
+            )
+            
+            # Crear datasets por splits
+            dataset_train = PCBDataset_convlstm(
+                T_interfaces=input_seq[idx_train, :, 0, ...],
+                Q_heaters=input_seq[idx_train, :, 1, ...],
+                T_env=input_seq[idx_train, :, 2, ...],
+                T_outputs=output_seq[idx_train],
+                T_interfaces_mean=T_interfaces_mean,
+                T_interfaces_std=T_interfaces_std,
+                Q_heaters_mean=Q_heaters_mean,
+                Q_heaters_std=Q_heaters_std,
+                T_env_mean=T_env_mean,
+                T_env_std=T_env_std,
+                T_outputs_mean=output_mean,
+                T_outputs_std=output_std,
+                return_bc=return_bc,
+                T_init=T_init_dataset[idx_train] if T_init_option == 'variable' else T_init_dataset
+            )
+            
+            dataset_val = PCBDataset_convlstm(
+                T_interfaces=input_seq[idx_val, :, 0, ...],
+                Q_heaters=input_seq[idx_val, :, 1, ...],
+                T_env=input_seq[idx_val, :, 2, ...],
+                T_outputs=output_seq[idx_val],
+                T_interfaces_mean=T_interfaces_mean,
+                T_interfaces_std=T_interfaces_std,
+                Q_heaters_mean=Q_heaters_mean,
+                Q_heaters_std=Q_heaters_std,
+                T_env_mean=T_env_mean,
+                T_env_std=T_env_std,
+                T_outputs_mean=output_mean,
+                T_outputs_std=output_std,
+                return_bc=return_bc,
+                T_init=T_init_dataset[idx_val] if T_init_option == 'variable' else T_init_dataset
+            )
+            
+            dataset_test = PCBDataset_convlstm(
+                T_interfaces=input_seq[idx_test, :, 0, ...],
+                Q_heaters=input_seq[idx_test, :, 1, ...],
+                T_env=input_seq[idx_test, :, 2, ...],
+                T_outputs=output_seq[idx_test],
+                T_interfaces_mean=T_interfaces_mean,
+                T_interfaces_std=T_interfaces_std,
+                Q_heaters_mean=Q_heaters_mean,
+                Q_heaters_std=Q_heaters_std,
+                T_env_mean=T_env_mean,
+                T_env_std=T_env_std,
+                T_outputs_mean=output_mean,
+                T_outputs_std=output_std,
+                return_bc=return_bc,
+                T_init=T_init_dataset[idx_test] if T_init_option == 'variable' else T_init_dataset
+            )
         
-        # Crear dataset completo
-        dataset = PCBDataset_convlstm(
-            T_interfaces=input_seq[:, :, 0, ...],
-            Q_heaters=input_seq[:, :, 1, ...],
-            T_env=input_seq[:, :, 2, ...],
-            T_outputs=output_seq,
-            T_interfaces_mean=T_interfaces_mean,
-            T_interfaces_std=T_interfaces_std,
-            Q_heaters_mean=Q_heaters_mean,
-            Q_heaters_std=Q_heaters_std,
-            T_env_mean=T_env_mean,
-            T_env_std=T_env_std,
-            T_outputs_mean=output_mean,
-            T_outputs_std=output_std,
-            return_bc=return_bc
-        )
-        
-        # Crear datasets por splits
-        dataset_train = PCBDataset_convlstm(
-            T_interfaces=input_seq[idx_train, :, 0, ...],
-            Q_heaters=input_seq[idx_train, :, 1, ...],
-            T_env=input_seq[idx_train, :, 2, ...],
-            T_outputs=output_seq[idx_train],
-            T_interfaces_mean=T_interfaces_mean,
-            T_interfaces_std=T_interfaces_std,
-            Q_heaters_mean=Q_heaters_mean,
-            Q_heaters_std=Q_heaters_std,
-            T_env_mean=T_env_mean,
-            T_env_std=T_env_std,
-            T_outputs_mean=output_mean,
-            T_outputs_std=output_std,
-            return_bc=return_bc
-        )
-        
-        dataset_val = PCBDataset_convlstm(
-            T_interfaces=input_seq[idx_val, :, 0, ...],
-            Q_heaters=input_seq[idx_val, :, 1, ...],
-            T_env=input_seq[idx_val, :, 2, ...],
-            T_outputs=output_seq[idx_val],
-            T_interfaces_mean=T_interfaces_mean,
-            T_interfaces_std=T_interfaces_std,
-            Q_heaters_mean=Q_heaters_mean,
-            Q_heaters_std=Q_heaters_std,
-            T_env_mean=T_env_mean,
-            T_env_std=T_env_std,
-            T_outputs_mean=output_mean,
-            T_outputs_std=output_std,
-            return_bc=return_bc
-        )
-        
-        dataset_test = PCBDataset_convlstm(
-            T_interfaces=input_seq[idx_test, :, 0, ...],
-            Q_heaters=input_seq[idx_test, :, 1, ...],
-            T_env=input_seq[idx_test, :, 2, ...],
-            T_outputs=output_seq[idx_test],
-            T_interfaces_mean=T_interfaces_mean,
-            T_interfaces_std=T_interfaces_std,
-            Q_heaters_mean=Q_heaters_mean,
-            Q_heaters_std=Q_heaters_std,
-            T_env_mean=T_env_mean,
-            T_env_std=T_env_std,
-            T_outputs_mean=output_mean,
-            T_outputs_std=output_std,
-            return_bc=return_bc
-        )
-        
-        # Guardar datasets
-        print(f"    💾 Guardando archivos...")
+            # Guardar datasets
+            print(f"    💾 Guardando archivos...")
 
-        if return_bc:
-            # Con física - usar sufijo 'phy'
-            torch.save(dataset_train, os.path.join(path, f'PCB_convlstm_dt{step_interval}_phy_6ch_dataset_train.pth'))
-            torch.save(dataset_test, os.path.join(path, f'PCB_convlstm_dt{step_interval}_phy_6ch_dataset_test.pth'))
-            torch.save(dataset_val, os.path.join(path, f'PCB_convlstm_dt{step_interval}_phy_6ch_dataset_val.pth'))
-            torch.save(dataset, os.path.join(path, f'PCB_convlstm_dt{step_interval}_phy_6ch_dataset.pth'))
-        else:
-            # Sin física - sin sufijo (como antes)
-            torch.save(dataset_train, os.path.join(path, f'PCB_convlstm_dt{step_interval}_6ch_dataset_train.pth'))
-            torch.save(dataset_test, os.path.join(path, f'PCB_convlstm_dt{step_interval}_6ch_dataset_test.pth'))
-            torch.save(dataset_val, os.path.join(path, f'PCB_convlstm_dt{step_interval}_6ch_dataset_val.pth'))
-            torch.save(dataset, os.path.join(path, f'PCB_convlstm_dt{step_interval}_6ch_dataset.pth'))
-                
-        # Limpiar memoria
-        del dataset, dataset_train, dataset_val, dataset_test
-        
-        print(f"    ✅ Datasets guardados para dt{step_interval}_{bc_str}")
+            if return_bc:
+                # Con física - usar sufijo 'phy'
+                if T_init_option == 'variable':
+                    # Temperatura inicial variable - agregar 'var'
+                    torch.save(dataset_train, os.path.join(path, f'PCB_convlstm_dt{step_interval}_phy_var_6ch_dataset_train.pth'))
+                    torch.save(dataset_test, os.path.join(path, f'PCB_convlstm_dt{step_interval}_phy_var_6ch_dataset_test.pth'))
+                    torch.save(dataset_val, os.path.join(path, f'PCB_convlstm_dt{step_interval}_phy_var_6ch_dataset_val.pth'))
+                    torch.save(dataset, os.path.join(path, f'PCB_convlstm_dt{step_interval}_phy_var_6ch_dataset.pth'))
+                else:
+                    # Temperatura inicial fija
+                    torch.save(dataset_train, os.path.join(path, f'PCB_convlstm_dt{step_interval}_phy_6ch_dataset_train.pth'))
+                    torch.save(dataset_test, os.path.join(path, f'PCB_convlstm_dt{step_interval}_phy_6ch_dataset_test.pth'))
+                    torch.save(dataset_val, os.path.join(path, f'PCB_convlstm_dt{step_interval}_phy_6ch_dataset_val.pth'))
+                    torch.save(dataset, os.path.join(path, f'PCB_convlstm_dt{step_interval}_phy_6ch_dataset.pth'))
+            else:
+                # Sin física - sin sufijo (como antes)
+                if T_init_option == 'variable':
+                    # Temperatura inicial variable - agregar 'var'
+                    torch.save(dataset_train, os.path.join(path, f'PCB_convlstm_dt{step_interval}_var_6ch_dataset_train.pth'))
+                    torch.save(dataset_test, os.path.join(path, f'PCB_convlstm_dt{step_interval}_var_6ch_dataset_test.pth'))
+                    torch.save(dataset_val, os.path.join(path, f'PCB_convlstm_dt{step_interval}_var_6ch_dataset_val.pth'))
+                    torch.save(dataset, os.path.join(path, f'PCB_convlstm_dt{step_interval}_var_6ch_dataset.pth'))
+                else:
+                    # Temperatura inicial fija
+                    torch.save(dataset_train, os.path.join(path, f'PCB_convlstm_dt{step_interval}_6ch_dataset_train.pth'))
+                    torch.save(dataset_test, os.path.join(path, f'PCB_convlstm_dt{step_interval}_6ch_dataset_test.pth'))
+                    torch.save(dataset_val, os.path.join(path, f'PCB_convlstm_dt{step_interval}_6ch_dataset_val.pth'))
+                    torch.save(dataset, os.path.join(path, f'PCB_convlstm_dt{step_interval}_6ch_dataset.pth'))
+                    
+            # Limpiar memoria
+            del dataset, dataset_train, dataset_val, dataset_test
+            
+            print(f"    ✅ Datasets guardados para dt{step_interval}_{bc_str}_{init_str}")
         
      # Print del tiempo transcurrido para este step_interval
     step_elapsed_time = time.time() - step_start_time
