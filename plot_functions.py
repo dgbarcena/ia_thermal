@@ -1391,7 +1391,6 @@ def plot_accuracy_metrics_summary(T_true, T_pred_list, model_names, umbrales=[1,
         
         
 #%%
-
 def plot_6_canales_mapas(data, save_as_pdf=False, filename='6_canales_mapas', save_individual=False):
     """
     Plotea 6 canales como mapas de calor 13x13 sin labels ni colorbar
@@ -1413,7 +1412,7 @@ def plot_6_canales_mapas(data, save_as_pdf=False, filename='6_canales_mapas', sa
         data = np.transpose(data, (2, 0, 1))  # Convertir a (channels, height, width)
     
     # =============== FIGURE CONFIGURATION WITH WHITE BACKGROUND ===============
-    fig, axes = plt.subplots(2, 3)
+    fig, axes = plt.subplots(2, 3, figsize=(6, 4))  # Tamaño fijo para mejor control
     fig.patch.set_facecolor('white')
     
     # Title only for visualization (will be removed when saving PDF)
@@ -1429,14 +1428,21 @@ def plot_6_canales_mapas(data, save_as_pdf=False, filename='6_canales_mapas', sa
         axes[i].set_xticks([])
         axes[i].set_yticks([])
         axes[i].tick_params(colors='black')
+        axes[i].axis('off')  # Eliminar completamente los ejes
     
-    plt.tight_layout()
+    # Ajustar espaciado entre subplots para eliminar gaps
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0, hspace=0)
     
     if save_as_pdf:
         # Remove title before saving
         title_handle.set_visible(False)
         os.makedirs('figures', exist_ok=True)
-        plt.savefig(f'figures/{filename}.pdf', format='pdf', facecolor='white', bbox_inches='tight')
+        plt.savefig(f'figures/{filename}.pdf', 
+                   format='pdf', 
+                   facecolor='white', 
+                   bbox_inches='tight',
+                   pad_inches=0,          # 🔥 Elimina padding completamente
+                   dpi=300)               # Alta resolución
         # Restore title for visualization
         title_handle.set_visible(True)
     
@@ -1446,16 +1452,23 @@ def plot_6_canales_mapas(data, save_as_pdf=False, filename='6_canales_mapas', sa
     if save_individual and save_as_pdf:
         for i in range(6):
             # =============== INDIVIDUAL FIGURE CONFIGURATION ===============
-            fig_individual = plt.figure()
+            fig_individual, ax = plt.subplots(figsize=(2, 2))  # Tamaño compacto
             fig_individual.patch.set_facecolor('white')
-            ax = plt.gca()
             ax.set_facecolor('white')
             
-            plt.imshow(data[i], cmap='viridis', interpolation='nearest')
-            plt.axis('off')
+            ax.imshow(data[i], cmap='viridis', interpolation='nearest')
+            ax.axis('off')
+            
+            # Eliminar completamente los márgenes
+            fig_individual.subplots_adjust(left=0, right=1, top=1, bottom=0)
             
             individual_path = f"figures/{filename}_canal_{i+1}.pdf"
-            plt.savefig(individual_path, format='pdf', facecolor='white', bbox_inches='tight')
+            plt.savefig(individual_path, 
+                       format='pdf', 
+                       facecolor='white', 
+                       bbox_inches='tight',
+                       pad_inches=0,      # 🔥 Sin padding
+                       dpi=300)
             plt.close()
             
         print(f"Mapas individuales guardados en: figures/")

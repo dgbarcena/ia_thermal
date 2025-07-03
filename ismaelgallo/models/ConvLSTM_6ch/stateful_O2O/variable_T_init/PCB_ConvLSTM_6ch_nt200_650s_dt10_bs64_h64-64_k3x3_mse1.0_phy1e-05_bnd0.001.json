@@ -1,0 +1,81 @@
+{
+    "start_datetime": "2025-07-02 12:41:21",
+    "training_duration_minutes": 0.9517697056134542,
+    "model_parameters": 456769,
+    "system_specs": null,
+    "simulation_time": 650,
+    "dt": 10,
+    "n_train": 200,
+    "n_val": 40,
+    "n_test": 4,
+    "input_channels": 6,
+    "sequence_length": 66,
+    "epochs": 1000,
+    "hidden_dims": [
+        64,
+        64
+    ],
+    "kernel_size": [
+        3,
+        3
+    ],
+    "scheduled_sampling": {
+        "p0": 1.0,
+        "p_min": 0.0,
+        "decay_epochs": 200
+    },
+    "batch_size": 64,
+    "epochs_trained": 2,
+    "best_val_loss": 1.1246618032455444,
+    "lr": 0.01,
+    "scheduler": {
+        "type": "ReduceLROnPlateau",
+        "factor": 0.1,
+        "patience": 10,
+        "final_lr": 0.01,
+        "early_stop_patience": 100
+    },
+    "loss_weights": {
+        "mse": 1.0,
+        "physics": 1e-05,
+        "boundary": 0.001
+    },
+    "losses": {
+        "train": {
+            "total": [
+                2.257091671228409,
+                1.414902925491333
+            ],
+            "mse": [
+                1.3884045779705048,
+                0.9878839552402496
+            ],
+            "physics": [
+                0.05118402931839228,
+                0.03541570156812668
+            ],
+            "boundary": [
+                868.6865386962891,
+                427.0185546875
+            ]
+        },
+        "val": {
+            "total": [
+                1.544271469116211,
+                1.1246618032455444
+            ],
+            "mse": [
+                1.0728533267974854,
+                0.7162020206451416
+            ],
+            "physics": [
+                0.03846156969666481,
+                0.024273155257105827
+            ],
+            "boundary": [
+                471.4176940917969,
+                408.4595031738281
+            ]
+        }
+    }
+}

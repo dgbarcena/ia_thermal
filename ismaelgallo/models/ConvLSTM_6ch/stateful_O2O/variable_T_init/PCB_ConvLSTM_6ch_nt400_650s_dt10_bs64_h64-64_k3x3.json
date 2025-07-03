@@ -1,0 +1,94 @@
+{
+    "start_datetime": "2025-07-01 15:40:12",
+    "training_duration_minutes": 10.199274504184723,
+    "model_parameters": 456769,
+    "system_specs": {
+        "platform": "Windows-10-10.0.19041-SP0",
+        "python_version": "3.9.21",
+        "torch_version": "2.5.1",
+        "cuda_available": true,
+        "cuda_version": "11.8",
+        "gpu_count": 1,
+        "primary_gpu_name": "NVIDIA GeForce GTX 1050",
+        "gpu_details": {
+            "gpu_0": {
+                "name": "NVIDIA GeForce GTX 1050",
+                "memory_total_gb": 2.0,
+                "compute_capability": "6.1",
+                "multi_processor_count": 5
+            }
+        },
+        "cpu_count_logical": 6,
+        "cpu_count_physical": 6,
+        "memory_total_gb": 15.92
+    },
+    "simulation_time": 650,
+    "dt": 10,
+    "n_train": 400,
+    "n_val": 80,
+    "n_test": 8,
+    "input_channels": 6,
+    "sequence_length": 66,
+    "epochs": 1000,
+    "hidden_dims": [
+        64,
+        64
+    ],
+    "kernel_size": [
+        [
+            3,
+            3
+        ],
+        [
+            3,
+            3
+        ]
+    ],
+    "scheduled_sampling": {
+        "p0": 1.0,
+        "p_min": 0.0,
+        "decay_epochs": 200
+    },
+    "batch_size": 64,
+    "lr": 0.01,
+    "scheduler": {
+        "type": "ReduceLROnPlateau",
+        "factor": 0.1,
+        "patience": 10,
+        "final_lr": 0.01
+    },
+    "early_stop_patience": 100,
+    "epochs_trained": 10,
+    "best_val_loss": 0.12415894865989685,
+    "train_loss": [
+        1.4125913211277552,
+        0.3427662508828299,
+        0.15302623276199614,
+        0.08361592356647764,
+        0.06486316929970469,
+        0.04485855198332241,
+        0.03292454486446721,
+        0.025918482935854366,
+        0.019263351602213725,
+        0.015022707437830312
+    ],
+    "val_loss": [
+        1.4329645037651062,
+        0.7135154902935028,
+        0.7706168591976166,
+        1.2475742101669312,
+        1.0687021017074585,
+        0.49717965722084045,
+        0.7593171000480652,
+        0.6712770164012909,
+        0.24316292256116867,
+        0.12415894865989685
+    ],
+    "training_config": {
+        "amp_enabled": true,
+        "use_compile": false,
+        "clip_grad": null,
+        "device_type": "cuda",
+        "cudnn_benchmark": true
+    }
+}

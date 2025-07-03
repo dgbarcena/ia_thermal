@@ -25,7 +25,7 @@ sys.path.append(str(root_path))
 from utils import downsample_sequences
 
 # Parámetros de configuración
-n_train = 50
+n_train = 1000
 n_validation = n_train // 5
 n_test = n_validation // 10
 n_data = n_train + n_test + n_validation
@@ -41,7 +41,8 @@ dt = 1
 T_init = 298.0
 
 # =============== CONFIGURACIÓN DE ITERACIONES ===============
-step_intervals = [1, 2, 5, 10, 20, 50, 100]
+# step_intervals = [1, 2, 5, 10, 20, 50, 100]
+step_intervals = [1, 10]
 return_bc_options = [True, False]  # Lista de opciones para return_bc (NO TOCAR)
 T_init_options = [298.0, 'variable']  # Nueva opción: temperatura inicial fija o variable
 
